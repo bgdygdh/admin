@@ -344,7 +344,8 @@ async function handleLogin(e) {
           ownerName: res.profile.full_name,
           ownerEmail: res.profile.email,
           category: res.shop.description || 'Fashion Store',
-          vton_enabled: res.shop.vton_enabled === true
+          vton_enabled: res.shop.vton_enabled === true,
+          is_active: res.shop.is_active !== false
         });
       }
       localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
@@ -493,6 +494,31 @@ function switchTab(tabName) {
 // 5. Super Admin Functions: Register New Merchant & Shop (LIVE SUPABASE SYNC)
 // =============================================================================
 
+// Auto-generate lowercase store code from shop name
+function autoGenerateStoreCode(name) {
+  const codeInput = document.getElementById('newShopCode');
+  if (!codeInput) return;
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  codeInput.value = slug;
+}
+
+function autoGenerateEditStoreCode(name) {
+  const codeInput = document.getElementById('editShopCode');
+  if (!codeInput) return;
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  codeInput.value = slug;
+}
+
 function renderSuperShops() {
   const allTbody = document.getElementById('superAllShopsTbody');
   const recentTbody = document.getElementById('superRecentShopsTbody');
@@ -505,14 +531,14 @@ function renderSuperShops() {
   const searchVal = (document.getElementById('shopSearchInput')?.value || '').toLowerCase();
   const filtered = shops.filter(s => 
     s.name.toLowerCase().includes(searchVal) || 
-    s.code.toLowerCase().includes(searchVal) || 
+    (s.code || '').toLowerCase().includes(searchVal) || 
     s.ownerEmail.toLowerCase().includes(searchVal) ||
     s.ownerName.toLowerCase().includes(searchVal)
   );
 
   const renderRow = (s, isRecent = false) => `
     <tr>
-      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">${s.code}</span></td>
+      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan); text-transform: lowercase;">${(s.code || '').toLowerCase()}</span></td>
       <td><strong>${s.name}</strong></td>
       <td>
         <div style="font-weight: 600;">${s.ownerName}</div>
@@ -521,17 +547,30 @@ function renderSuperShops() {
       ${!isRecent ? `<td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${s.ownerEmail}</span></td>` : ''}
       <td><span class="badge badge-indigo">${s.category}</span></td>
       <td>
-        <span class="badge ${s.vton_enabled ? 'badge-emerald' : 'badge-amber'}">
-          <i class="fa-solid ${s.vton_enabled ? 'fa-circle-check' : 'fa-clock'}"></i>
-          ${s.vton_enabled ? 'Active in App' : 'Not Activated'}
+        <span class="badge ${s.is_active !== false ? 'badge-emerald' : 'badge-rose'}">
+          <i class="fa-solid ${s.is_active !== false ? 'fa-circle-check' : 'fa-ban'}"></i>
+          ${s.is_active !== false ? 'Active' : 'Deactivated'}
         </span>
       </td>
-      ${isRecent ? `<td><span style="color: var(--text-dim); font-size: 0.78rem;">${s.joinedDate}</span></td>` : ''}
+      <td>
+        <span class="badge ${s.vton_enabled ? 'badge-cyan' : 'badge-amber'}">
+          <i class="fa-solid ${s.vton_enabled ? 'fa-wand-magic-sparkles' : 'fa-clock'}"></i>
+          ${s.vton_enabled ? 'VTON Live' : 'VTON Off'}
+        </span>
+      </td>
       ${!isRecent ? `
         <td>
-          <button class="btn btn-outline btn-sm" onclick="toggleShopVton('${s.id}')" title="Toggle VTON">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Toggle VTON
-          </button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-outline btn-sm" onclick="openEditShopModal('${s.id}')" title="Edit Store Details">
+              <i class="fa-solid fa-pen-to-square"></i> Edit
+            </button>
+            <button class="btn btn-outline btn-sm" style="${s.is_active !== false ? 'color: var(--accent-rose); border-color: rgba(244,63,94,0.3);' : 'color: var(--accent-emerald); border-color: rgba(16,185,129,0.3);'}" onclick="toggleShopActive('${s.id}')" title="${s.is_active !== false ? 'Deactivate Store' : 'Activate Store'}">
+              <i class="fa-solid ${s.is_active !== false ? 'fa-ban' : 'fa-check'}"></i> ${s.is_active !== false ? 'Deactivate' : 'Activate'}
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On SDK">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> VTON
+            </button>
+          </div>
         </td>
       ` : ''}
     </tr>
@@ -542,7 +581,7 @@ function renderSuperShops() {
     if (filtered.length === 0) {
       allTbody.innerHTML = `
         <tr>
-          <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+          <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
             <i class="fa-solid fa-store" style="font-size: 2rem; color: var(--text-dim); margin-bottom: 10px; display: block;"></i>
             <strong>No Registered Merchant Stores Found</strong>
             <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">Click the "+ Register New Shop" button above to add your first store into Supabase.</div>
@@ -584,13 +623,95 @@ function openRegisterShopModal() {
   openModal('registerShopModal');
 }
 
-// Live Super Admin Provisioning Function
+// Super Admin: Open Edit Shop Modal
+function openEditShopModal(shopId) {
+  const shop = shops.find(s => s.id === shopId);
+  if (!shop) return;
+
+  document.getElementById('editShopId').value = shop.id;
+  document.getElementById('editShopName').value = shop.name;
+  document.getElementById('editShopCode').value = (shop.code || '').toLowerCase();
+  
+  const catSelect = document.getElementById('editShopCategory');
+  if (catSelect) {
+    for (let opt of catSelect.options) {
+      if (opt.value === shop.category) {
+        opt.selected = true;
+        break;
+      }
+    }
+  }
+
+  openModal('editShopModal');
+}
+
+// Super Admin: Save Edited Shop
+async function handleSaveEditShop(e) {
+  e.preventDefault();
+  const shopId = document.getElementById('editShopId').value;
+  const name = document.getElementById('editShopName').value.trim();
+  const code = document.getElementById('editShopCode').value.trim().toLowerCase();
+  const category = document.getElementById('editShopCategory').value;
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving changes...';
+
+  // Update in Supabase
+  if (window.db && window.db.updateShop) {
+    const res = await window.db.updateShop(shopId, { name, code, category });
+    if (!res.success) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Shop Changes';
+      showToast(`Failed to update shop: ${res.error}`, 'error');
+      return;
+    }
+  }
+
+  // Update in local state
+  const idx = shops.findIndex(s => s.id === shopId);
+  if (idx !== -1) {
+    shops[idx].name = name;
+    shops[idx].code = code;
+    shops[idx].category = category;
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Shop Changes';
+  closeModal('editShopModal');
+  showToast(`Store "${name}" updated successfully!`, 'success');
+  renderSuperShops();
+}
+
+// Super Admin: Activate / Deactivate Shop
+async function toggleShopActive(shopId) {
+  const shop = shops.find(s => s.id === shopId);
+  if (!shop) return;
+
+  const nextState = shop.is_active === false; // If currently false, make true; else false
+  const actionName = nextState ? 'activate' : 'deactivate';
+
+  if (confirm(`Are you sure you want to ${actionName} "${shop.name}"? ${!nextState ? 'The merchant will be prevented from accessing the portal.' : ''}`)) {
+    shop.is_active = nextState;
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
+    if (window.db && window.db.toggleShopActive) {
+      await window.db.toggleShopActive(shopId, nextState);
+    }
+
+    showToast(`Store "${shop.name}" has been ${nextState ? 'Activated' : 'Deactivated'}.`, nextState ? 'success' : 'info');
+    renderSuperShops();
+  }
+}
+
+// Live Super Admin Provisioning Function (lowercase store code)
 async function handleSuperRegisterShop(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
   const name = document.getElementById('newShopName').value.trim();
-  const code = document.getElementById('newShopCode').value.trim().toUpperCase();
+  const code = document.getElementById('newShopCode').value.trim().toLowerCase();
   const category = document.getElementById('newShopCategory').value;
   const ownerName = document.getElementById('newOwnerName').value.trim();
   const ownerEmail = document.getElementById('newOwnerEmail').value.trim();
@@ -622,11 +743,12 @@ async function handleSuperRegisterShop(e) {
     const newShop = {
       id: result.shop.id,
       name: result.shop.name,
-      code: result.shop.store_code,
+      code: (result.shop.store_code || code).toLowerCase(),
       ownerName: ownerName,
       ownerEmail: ownerEmail,
       category: category,
       vton_enabled: false,
+      is_active: true,
       joinedDate: 'Just now'
     };
 
@@ -634,7 +756,7 @@ async function handleSuperRegisterShop(e) {
     localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     closeModal('registerShopModal');
-    showToast(`🎉 Shop "${name}" (${code}) provisioned in Supabase! Owner login: ${ownerEmail}`, 'success');
+    showToast(`🎉 Shop "${name}" (${newShop.code}) provisioned in Supabase! Owner login: ${ownerEmail}`, 'success');
     renderSuperShops();
 
   } else {
@@ -645,17 +767,18 @@ async function handleSuperRegisterShop(e) {
     const newShop = {
       id: `shop_${code.toLowerCase()}_${Date.now()}`,
       name,
-      code,
+      code: code.toLowerCase(),
       ownerName,
       ownerEmail,
       category,
       vton_enabled: false,
+      is_active: true,
       joinedDate: 'Today'
     };
     shops.unshift(newShop);
     localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
     closeModal('registerShopModal');
-    showToast(`🎉 Shop "${name}" (${code}) created!`, 'success');
+    showToast(`🎉 Shop "${name}" (${newShop.code}) created!`, 'success');
     renderSuperShops();
   }
 }

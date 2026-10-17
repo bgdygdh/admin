@@ -31,7 +31,7 @@ window.db = {
     }
   },
 
-  // 1. Authenticate user, verify role, and reject customers
+  // 1. Authenticate user, verify role, enforce customer ban & shop active status
   async login(email, password) {
     if (!supabaseClient) {
       return { success: false, error: 'Database client not connected.' };
@@ -53,13 +53,12 @@ window.db = {
       }
 
       // Fetch user profile from public.user_profiles
-      let { data: profile, error: profErr } = await supabaseClient
+      let { data: profile } = await supabaseClient
         .from('user_profiles')
         .select('*')
         .eq('id', authUser.id)
         .maybeSingle();
 
-      // Fallback: If profile row is missing, check user metadata or create it
       if (!profile) {
         const metadataRole = authUser.user_metadata?.role || (email.toLowerCase().includes('admin') ? 'admin' : 'customer');
         const fullName = authUser.user_metadata?.full_name || authUser.email.split('@')[0];
@@ -87,7 +86,7 @@ window.db = {
         };
       }
 
-      // If user is a Store Owner, load their registered shop
+      // If user is a Store Owner, verify shop existence and active status
       let shop = null;
       if (profile.role === 'owner') {
         const { data: shopData } = await supabaseClient
@@ -99,10 +98,20 @@ window.db = {
         shop = shopData || {
           id: `shop_${authUser.id.substring(0, 8)}`,
           name: profile.full_name ? `${profile.full_name}'s Store` : 'Merchant Store',
-          code: 'SHOP',
+          store_code: 'shop',
           vton_enabled: false,
+          is_active: true,
           owner_id: authUser.id
         };
+
+        // ⛔ Check if shop was deactivated by Super Admin
+        if (shop.is_active === false) {
+          await supabaseClient.auth.signOut();
+          return {
+            success: false,
+            error: `Access Denied: "${shop.name}" has been deactivated by the Super Administrator. Please contact platform support.`
+          };
+        }
       }
 
       return {
@@ -119,14 +128,13 @@ window.db = {
     }
   },
 
-  // 2. Super Admin: Register a new Merchant and Shop in Supabase
+  // 2. Super Admin: Register a new Merchant and Shop (lowercase code, no logo_url, is_active=true)
   async registerMerchantShop({ name, code, category, ownerName, ownerEmail, ownerPassword }) {
     if (!supabaseClient) {
       return { success: false, error: 'Database client not connected.' };
     }
 
     try {
-      // Create an unpersisted secondary client so the Super Admin's active session is NOT interrupted
       const tempAuthClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
           persistSession: false,
@@ -134,7 +142,7 @@ window.db = {
         }
       });
 
-      // A. Create the merchant in Supabase Auth (auth.users)
+      // A. Create the merchant in Supabase Auth
       const { data: authData, error: authErr } = await tempAuthClient.auth.signUp({
         email: ownerEmail.trim(),
         password: ownerPassword,
@@ -157,8 +165,8 @@ window.db = {
 
       const merchantId = merchantUser.id;
 
-      // B. Insert or update record in public.user_profiles
-      const { error: profErr } = await supabaseClient
+      // B. Insert into public.user_profiles (no phone_number)
+      await supabaseClient
         .from('user_profiles')
         .upsert({
           id: merchantId,
@@ -167,19 +175,17 @@ window.db = {
           role: 'owner'
         });
 
-      if (profErr) {
-        console.warn('user_profiles upsert note:', profErr.message);
-      }
-
-      // C. Insert new store record into public.shops
+      // C. Insert into public.shops (lowercase store_code, is_active=true, no logo_url)
+      const sanitizedCode = code.trim().toLowerCase();
       const { data: newShop, error: shopErr } = await supabaseClient
         .from('shops')
         .insert({
           owner_id: merchantId,
-          store_code: code.trim().toUpperCase(),
+          store_code: sanitizedCode,
           name: name.trim(),
           description: `${category} merchant store.`,
-          vton_enabled: false
+          vton_enabled: false,
+          is_active: true
         })
         .select()
         .single();
@@ -204,20 +210,60 @@ window.db = {
     }
   },
 
-  // 3. Fetch all registered shops from Supabase
+  // 3. Super Admin: Update existing shop details (Edit Shop)
+  async updateShop(shopId, { name, code, category }) {
+    if (!supabaseClient) return { success: true };
+    try {
+      const { data, error } = await supabaseClient
+        .from('shops')
+        .update({
+          name: name.trim(),
+          store_code: code.trim().toLowerCase(),
+          description: `${category} merchant store.`
+        })
+        .eq('id', shopId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error updating shop:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  // 4. Super Admin: Activate / Deactivate a Shop
+  async toggleShopActive(shopId, makeActive) {
+    if (!supabaseClient) return { success: true };
+    try {
+      const { data, error } = await supabaseClient
+        .from('shops')
+        .update({ is_active: makeActive })
+        .eq('id', shopId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error toggling shop status:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  // 5. Fetch all registered shops from Supabase
   async fetchShops() {
     if (!supabaseClient) return [];
 
     try {
-      // Query shops
       const { data: shopsData, error: shopsErr } = await supabaseClient
         .from('shops')
-        .select('*')
+        .select('id, owner_id, store_code, name, description, vton_enabled, is_active, created_at')
         .order('created_at', { ascending: false });
 
       if (shopsErr) throw shopsErr;
 
-      // Query owners from user_profiles to join owner details
       const { data: profilesData } = await supabaseClient
         .from('user_profiles')
         .select('id, full_name, email');
@@ -232,11 +278,12 @@ window.db = {
         return {
           id: s.id,
           name: s.name,
-          code: s.store_code,
+          code: (s.store_code || '').toLowerCase(),
           ownerName: owner.full_name || 'Merchant Owner',
           ownerEmail: owner.email || 'N/A',
           category: s.description ? s.description.replace(' merchant store.', '') : 'Fashion & Apparel',
           vton_enabled: s.vton_enabled === true,
+          is_active: s.is_active !== false, // Defaults to true
           joinedDate: s.created_at ? new Date(s.created_at).toLocaleDateString() : 'Active'
         };
       });
@@ -246,7 +293,7 @@ window.db = {
     }
   },
 
-  // 4. Update shop VTON status in Supabase
+  // 6. Update shop VTON status in Supabase
   async updateVtonStatus(shopId, enabled) {
     if (!supabaseClient) return { success: true, offline: true };
     try {
@@ -262,7 +309,7 @@ window.db = {
     }
   },
 
-  // 5. Fetch platform stats (shops count, products count)
+  // 7. Fetch platform stats
   async fetchPlatformStats() {
     if (!supabaseClient) return null;
     try {
@@ -283,7 +330,6 @@ window.db = {
     }
   },
 
-  // 6. Logout
   async logout() {
     if (supabaseClient) {
       await supabaseClient.auth.signOut();

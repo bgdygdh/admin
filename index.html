@@ -243,10 +243,10 @@
                 <tr>
                   <th>Store Code</th>
                   <th>Shop Name</th>
-                  <th>Owner Name & Email</th>
+                  <th>Owner</th>
                   <th>Category</th>
-                  <th>VTON Status</th>
-                  <th>Date Joined</th>
+                  <th>Store Status</th>
+                  <th>VTON Engine</th>
                 </tr>
               </thead>
               <tbody id="superRecentShopsTbody">
@@ -283,7 +283,8 @@
                   <th>Merchant Owner</th>
                   <th>Owner Contact Email</th>
                   <th>Category</th>
-                  <th>VTON Plugin</th>
+                  <th>Store Status</th>
+                  <th>VTON Engine</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -705,11 +706,11 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
             <div class="form-group">
               <label>Store Brand Name</label>
-              <input type="text" id="newShopName" class="form-input" placeholder="e.g. Uniqlo Manila" required>
+              <input type="text" id="newShopName" class="form-input" placeholder="e.g. Bench Philippines" required oninput="autoGenerateStoreCode(this.value)">
             </div>
             <div class="form-group">
-              <label>Unique Store Code</label>
-              <input type="text" id="newShopCode" class="form-input" placeholder="e.g. UNIQLO" style="text-transform: uppercase;" required>
+              <label>Unique Store Code (Auto-generated lowercase)</label>
+              <input type="text" id="newShopCode" class="form-input" placeholder="e.g. bench-philippines" style="text-transform: lowercase; font-family: var(--font-mono);" required>
             </div>
           </div>
           <div class="form-group">
@@ -739,6 +740,44 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('registerShopModal')">Cancel</button>
           <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Register Shop & Provision</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Super Admin: Edit Merchant Shop Modal -->
+  <div id="editShopModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Edit Merchant Store</h3>
+        <button class="modal-close" onclick="closeModal('editShopModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleSaveEditShop(event)">
+        <div class="modal-body">
+          <input type="hidden" id="editShopId">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Store Brand Name</label>
+              <input type="text" id="editShopName" class="form-input" placeholder="e.g. Bench Philippines" required oninput="autoGenerateEditStoreCode(this.value)">
+            </div>
+            <div class="form-group">
+              <label>Unique Store Code (lowercase)</label>
+              <input type="text" id="editShopCode" class="form-input" placeholder="e.g. bench-philippines" style="text-transform: lowercase; font-family: var(--font-mono);" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Store Category / Industry</label>
+            <select id="editShopCategory" class="form-input" required>
+              <option value="Casual & Streetwear">Casual & Streetwear</option>
+              <option value="Luxury & Formalwear">Luxury & Formalwear</option>
+              <option value="Activewear & Sports">Activewear & Sports</option>
+              <option value="Denim & Apparel">Denim & Apparel</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editShopModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Shop Changes</button>
         </div>
       </form>
     </div>
