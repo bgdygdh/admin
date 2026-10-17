@@ -19,7 +19,7 @@
 <body>
 
   <!-- =========================================================================
-       1. Auth Screen Overlay (Shop Registration & Login)
+       1. Auth Screen Overlay (Login Only - Registration done by Super Admin)
        ========================================================================= -->
   <div id="authWrapper" class="auth-wrapper">
     <div class="auth-box">
@@ -29,80 +29,77 @@
         </div>
         <div class="brand-title">
           <h1>Antigravity Admin</h1>
-          <span>Merchant Backstage</span>
+          <span>Portal Access</span>
         </div>
       </div>
 
-      <!-- Auth Mode Tabs -->
-      <div class="auth-tabs">
-        <button id="tabBtnLogin" class="auth-tab-btn active" onclick="switchAuthTab('login')">
-          <i class="fa-solid fa-right-to-bracket"></i> Login
-        </button>
-        <button id="tabBtnRegister" class="auth-tab-btn" onclick="switchAuthTab('register')">
-          <i class="fa-solid fa-store"></i> Register Shop
-        </button>
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="font-size: 1.25rem; font-weight: 700;">Sign in to your Account</h2>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+          Access the Super Admin console or your Store Merchant backstage
+        </p>
       </div>
 
       <!-- Login Form -->
       <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label><i class="fa-solid fa-envelope"></i> Store ID or Email</label>
-          <input type="text" id="loginId" class="form-input" placeholder="admin@bench.com or BENCH01" required value="admin@bench.com">
+          <label><i class="fa-solid fa-envelope"></i> Account Email</label>
+          <input type="email" id="loginId" class="form-input" placeholder="admin@antigravity.io or owner@bench.com" required value="owner@bench.com">
         </div>
         <div class="form-group">
           <label><i class="fa-solid fa-lock"></i> Password</label>
-          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required value="admin123456">
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required value="password123">
         </div>
         <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
-          <i class="fa-solid fa-arrow-right-to-bracket"></i> Access Merchant Dashboard
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Dashboard
         </button>
       </form>
 
-      <!-- Register Shop Form -->
-      <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
-        <div class="form-group">
-          <label><i class="fa-solid fa-shop"></i> Store / Brand Name</label>
-          <input type="text" id="regShopName" class="form-input" placeholder="e.g. Bench Philippines" required>
-        </div>
-        <div class="form-group">
-          <label><i class="fa-solid fa-hashtag"></i> Unique Store Code</label>
-          <input type="text" id="regShopCode" class="form-input" placeholder="e.g. BENCH" style="text-transform: uppercase;" required>
-        </div>
-        <div class="form-group">
-          <label><i class="fa-solid fa-envelope"></i> Merchant Email</label>
-          <input type="email" id="regEmail" class="form-input" placeholder="owner@bench.com" required>
-        </div>
-        <div class="form-group">
-          <label><i class="fa-solid fa-lock"></i> Set Password</label>
-          <input type="password" id="regPassword" class="form-input" placeholder="Create strong password" required>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
-          <i class="fa-solid fa-circle-check"></i> Register Store & Connect
+      <!-- Quick 1-Click Role Switcher Demo Buttons -->
+      <div style="margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; text-align: center;">
+          ⚡ Fast 1-Click Role Preview
+        </span>
+        <button type="button" class="auth-demo-btn" onclick="loginAsSuperAdmin()" style="border-color: rgba(99, 102, 241, 0.4); color: #818cf8;">
+          <i class="fa-solid fa-shield-halved" style="color: #6366f1;"></i> 1-Click: <strong>Super Admin</strong> (Register Shops & Dashboard)
         </button>
-      </form>
-
-      <!-- Quick 1-Click Demo Login -->
-      <button type="button" class="auth-demo-btn" onclick="demoLogin()">
-        <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 1-Click Instant Demo Access (Bench Store)
-      </button>
+        <button type="button" class="auth-demo-btn" onclick="loginAsStoreOwner()" style="border-color: rgba(6, 182, 212, 0.4); color: #22d3ee;">
+          <i class="fa-solid fa-store" style="color: #06b6d4;"></i> 1-Click: <strong>Store Owner</strong> (Bench Store Merchant)
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- =========================================================================
-       2. Sidebar Navigation
+       2. Dynamic Sidebar Navigation (Changes based on Super Admin vs Owner)
        ========================================================================= -->
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="brand-icon">
+      <div class="brand-icon" id="sidebarBrandIcon">
         <i class="fa-solid fa-vest-patches"></i>
       </div>
       <div class="brand-title">
         <h1 id="sidebarShopTitle">Bench Store</h1>
-        <span>Merchant Portal</span>
+        <span id="sidebarRoleSubtitle">Store Merchant</span>
       </div>
     </div>
 
-    <nav class="sidebar-nav">
+    <!-- A. Super Admin Nav Items (Only Dashboard & Shops) -->
+    <nav class="sidebar-nav" id="superAdminNav" style="display: none;">
+      <div class="nav-section-label">Platform Governance</div>
+      <a class="nav-item active" onclick="switchTab('super-dashboard')">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Platform Dashboard</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('super-shops')">
+        <i class="fa-solid fa-store"></i>
+        <span>Registered Shops</span>
+        <span class="nav-badge" id="sidebarSuperShopsCount">3</span>
+      </a>
+    </nav>
+
+    <!-- B. Store Owner Nav Items (Dashboard, Products, Categories, Orders, Settings) -->
+    <nav class="sidebar-nav" id="storeOwnerNav">
       <div class="nav-section-label">Overview</div>
       <a class="nav-item active" onclick="switchTab('dashboard')">
         <i class="fa-solid fa-chart-pie"></i>
@@ -113,7 +110,7 @@
       <a class="nav-item" onclick="switchTab('products')">
         <i class="fa-solid fa-shirt"></i>
         <span>Products</span>
-        <span class="nav-badge" id="sidebarProductCount">12</span>
+        <span class="nav-badge" id="sidebarProductCount">8</span>
       </a>
 
       <a class="nav-item" onclick="switchTab('categories')">
@@ -125,7 +122,7 @@
       <a class="nav-item" onclick="switchTab('orders')">
         <i class="fa-solid fa-bag-shopping"></i>
         <span>Orders</span>
-        <span class="nav-badge" id="sidebarOrderCount">8</span>
+        <span class="nav-badge" id="sidebarOrderCount">5</span>
       </a>
 
       <div class="nav-section-label">System</div>
@@ -136,7 +133,7 @@
       </a>
     </nav>
 
-    <!-- Sidebar Footer / Store Owner Switcher -->
+    <!-- Sidebar Footer / User Profile & Logout -->
     <div class="sidebar-footer">
       <div class="user-shop-card">
         <div class="shop-avatar" id="avatarLetter">B</div>
@@ -165,9 +162,10 @@
           <span class="pulse-dot"></span>
           <span>Supabase Cloud Connected</span>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="switchTab('settings')">
-          <i class="fa-solid fa-sliders"></i> Store Settings
-        </button>
+        <!-- Role Indicator Pill -->
+        <div class="badge badge-indigo" id="topRoleBadge">
+          <i class="fa-solid fa-user-tag"></i> <span id="topRoleText">Store Owner</span>
+        </div>
       </div>
     </header>
 
@@ -175,7 +173,143 @@
     <main class="content-body">
 
       <!-- =====================================================================
-           TAB 1: DASHBOARD
+           SUPER ADMIN TAB 1: PLATFORM DASHBOARD
+           ===================================================================== -->
+      <section id="tab-super-dashboard" class="tab-view">
+        <!-- Global Platform Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Registered Shops</span>
+              <div class="stat-icon indigo"><i class="fa-solid fa-store"></i></div>
+            </div>
+            <div class="stat-value" id="superStatShops">3</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-circle-check"></i> All active</span>
+              <span>on platform</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Platform GMV</span>
+              <div class="stat-icon emerald"><i class="fa-solid fa-dollar-sign"></i></div>
+            </div>
+            <div class="stat-value">$324,850.00</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +28.4%</span>
+              <span>across all shops</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Total Try-On Sessions</span>
+              <div class="stat-icon cyan"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            </div>
+            <div class="stat-value">14,290</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-bullseye"></i> 94.8% fit satisfaction</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Active Garments</span>
+              <div class="stat-icon amber"><i class="fa-solid fa-shirt"></i></div>
+            </div>
+            <div class="stat-value">148 Items</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-check"></i> Multi-tenant</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Super Admin Quick Action Banner -->
+        <div class="plugin-feature-banner">
+          <div class="banner-content">
+            <div class="banner-badge-icon" style="background: linear-gradient(135deg, #6366f1, #3b82f6);">
+              <i class="fa-solid fa-store"></i>
+            </div>
+            <div class="banner-text">
+              <h4>Register & Provision a New Merchant Shop</h4>
+              <p>As Super Admin, you create and provision store credentials for new apparel brands and merchants.</p>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="openRegisterShopModal()">
+            <i class="fa-solid fa-plus"></i> Register New Shop
+          </button>
+        </div>
+
+        <!-- Registered Shops Quick Table -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3><i class="fa-solid fa-building" style="color: var(--primary);"></i> Registered Merchant Stores</h3>
+              <span class="card-subtitle">Brands currently utilizing the Body Measurement & VTON platform</span>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('super-shops')">View Full Directory</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Store Code</th>
+                  <th>Shop Name</th>
+                  <th>Owner Name & Email</th>
+                  <th>Category</th>
+                  <th>VTON Status</th>
+                  <th>Date Joined</th>
+                </tr>
+              </thead>
+              <tbody id="superRecentShopsTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           SUPER ADMIN TAB 2: REGISTERED SHOPS MANAGEMENT
+           ===================================================================== -->
+      <section id="tab-super-shops" class="tab-view">
+        <div class="toolbar-header">
+          <div class="toolbar-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="shopSearchInput" placeholder="Search shops by code, name, or owner..." oninput="filterShops()">
+          </div>
+          <div class="filter-group">
+            <button class="btn btn-primary" onclick="openRegisterShopModal()">
+              <i class="fa-solid fa-plus"></i> Register New Shop
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Store Code</th>
+                  <th>Brand Name</th>
+                  <th>Merchant Owner</th>
+                  <th>Owner Contact Email</th>
+                  <th>Category</th>
+                  <th>VTON Plugin</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="superAllShopsTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           STORE OWNER TAB 1: DASHBOARD
            ===================================================================== -->
       <section id="tab-dashboard" class="tab-view active">
         <!-- Metric Cards -->
@@ -209,7 +343,7 @@
               <span class="stat-title">Active Products</span>
               <div class="stat-icon cyan"><i class="fa-solid fa-tags"></i></div>
             </div>
-            <div class="stat-value" id="statProducts">12</div>
+            <div class="stat-value" id="statProducts">8</div>
             <div class="stat-trend">
               <span class="trend-up"><i class="fa-solid fa-check"></i> 100% in stock</span>
             </div>
@@ -245,7 +379,6 @@
 
         <!-- Charts and Activity Grid -->
         <div class="dashboard-grid">
-          <!-- Sales & VTON Analytics Chart -->
           <div class="card">
             <div class="card-header">
               <div>
@@ -265,20 +398,13 @@
                     <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0"/>
                   </linearGradient>
                 </defs>
-                <!-- Grid Lines -->
                 <line x1="0" y1="50" x2="600" y2="50" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
                 <line x1="0" y1="110" x2="600" y2="110" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
                 <line x1="0" y1="170" x2="600" y2="170" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
-                
-                <!-- TryOn Area Area -->
                 <path d="M 0 190 Q 100 160, 200 140 T 400 90 T 600 40 L 600 240 L 0 240 Z" fill="url(#tryonGrad)"/>
                 <path d="M 0 190 Q 100 160, 200 140 T 400 90 T 600 40" fill="none" stroke="#06b6d4" stroke-width="3"/>
-
-                <!-- Revenue Area -->
                 <path d="M 0 170 Q 100 130, 200 110 T 400 60 T 600 20 L 600 240 L 0 240 Z" fill="url(#chartGrad)"/>
                 <path d="M 0 170 Q 100 130, 200 110 T 400 60 T 600 20" fill="none" stroke="#6366f1" stroke-width="3"/>
-
-                <!-- Data Dots -->
                 <circle cx="100" cy="145" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
                 <circle cx="200" cy="110" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
                 <circle cx="300" cy="85" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
@@ -289,7 +415,6 @@
             </div>
           </div>
 
-          <!-- Live Try-On Feed -->
           <div class="card">
             <div class="card-header">
               <div>
@@ -333,7 +458,7 @@
       </section>
 
       <!-- =====================================================================
-           TAB 2: PRODUCTS
+           STORE OWNER TAB 2: PRODUCTS
            ===================================================================== -->
       <section id="tab-products" class="tab-view">
         <div class="toolbar-header">
@@ -361,14 +486,13 @@
           </div>
         </div>
 
-        <!-- Products Grid -->
         <div class="products-grid" id="productsGridContainer">
           <!-- Dynamically populated -->
         </div>
       </section>
 
       <!-- =====================================================================
-           TAB 3: CATEGORIES
+           STORE OWNER TAB 3: CATEGORIES
            ===================================================================== -->
       <section id="tab-categories" class="tab-view">
         <div class="toolbar-header">
@@ -387,7 +511,7 @@
       </section>
 
       <!-- =====================================================================
-           TAB 4: ORDERS
+           STORE OWNER TAB 4: ORDERS
            ===================================================================== -->
       <section id="tab-orders" class="tab-view">
         <div class="toolbar-header">
@@ -429,7 +553,7 @@
       </section>
 
       <!-- =====================================================================
-           TAB 5: SETTINGS (Includes The Interactive Download Animation Toggle!)
+           STORE OWNER TAB 5: SETTINGS (Includes Download Animation Switch)
            ===================================================================== -->
       <section id="tab-settings" class="tab-view">
         <div class="settings-section">
@@ -461,18 +585,15 @@
                   <span class="download-percentage" id="downloadPercentText">Ready to Install</span>
                 </div>
 
-                <!-- Progress Bar Track -->
                 <div class="download-progress-track" id="downloadProgressTrack">
                   <div class="download-progress-fill" id="downloadProgressFill"></div>
                 </div>
 
-                <!-- Initial Download / Activate Button -->
                 <button id="btnStartDownload" class="btn-download-action" onclick="triggerPluginDownloadAnimation()">
                   <i class="fa-solid fa-download download-arrow-icon"></i>
                   <span id="btnDownloadText">Install & Activate Plugin</span>
                 </button>
 
-                <!-- Installed Active State View (Shown after download completes) -->
                 <div class="installed-switch-view" id="installedSwitchView">
                   <div class="installed-status-info">
                     <span class="installed-badge-dot"></span>
@@ -486,14 +607,12 @@
                   </button>
                 </div>
 
-                <!-- Live status steps subtext -->
                 <div class="download-steps-log" id="downloadStepsLog">
                   <span>Click to install neural weights & size matching engine.</span>
                 </div>
               </div>
             </div>
 
-            <!-- Features list cards -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px;">
               <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
                 <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
@@ -584,7 +703,61 @@
   <!-- =========================================================================
        4. Modals
        ========================================================================= -->
-  <!-- Add Product Modal -->
+  <!-- Super Admin: Register New Shop Modal -->
+  <div id="registerShopModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-store" style="color: var(--primary);"></i> Register New Merchant Shop</h3>
+        <button class="modal-close" onclick="closeModal('registerShopModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleSuperRegisterShop(event)">
+        <div class="modal-body">
+          <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-sm); padding: 12px; font-size: 0.78rem; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i> This creates a new store in <code>public.shops</code> and provisions a merchant owner account with <code>role = 'owner'</code> in <code>public.user_profiles</code>.
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Store Brand Name</label>
+              <input type="text" id="newShopName" class="form-input" placeholder="e.g. Uniqlo Manila" required>
+            </div>
+            <div class="form-group">
+              <label>Unique Store Code</label>
+              <input type="text" id="newShopCode" class="form-input" placeholder="e.g. UNIQLO" style="text-transform: uppercase;" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Store Category / Industry</label>
+            <select id="newShopCategory" class="form-input" required>
+              <option value="Casual & Streetwear">Casual & Streetwear</option>
+              <option value="Luxury & Formalwear">Luxury & Formalwear</option>
+              <option value="Activewear & Sports">Activewear & Sports</option>
+              <option value="Denim & Apparel">Denim & Apparel</option>
+            </select>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Owner Full Name</label>
+              <input type="text" id="newOwnerName" class="form-input" placeholder="e.g. Kenji Sato" required>
+            </div>
+            <div class="form-group">
+              <label>Owner Email (Login ID)</label>
+              <input type="email" id="newOwnerEmail" class="form-input" placeholder="owner@uniqlo.com" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Temporary Merchant Password</label>
+            <input type="password" id="newOwnerPassword" class="form-input" placeholder="Create merchant password" value="password123" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('registerShopModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Register Shop & Provision</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Product Modal (For Store Owners) -->
   <div id="addProductModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
@@ -624,7 +797,6 @@
           <div class="form-group">
             <label>Garment Photo URL</label>
             <input type="url" id="prodImageUrl" class="form-input" placeholder="https://images.unsplash.com/..." required>
-            <span style="font-size: 0.72rem; color: var(--text-dim);">Paste image link or upload garment to Supabase storage.</span>
           </div>
           <div class="form-group">
             <label>Available Sizes & Stock Quantity</label>
@@ -693,9 +865,7 @@
         <h3 id="orderModalTitle">Order Details</h3>
         <button class="modal-close" onclick="closeModal('orderDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <div class="modal-body" id="orderModalBody">
-        <!-- Dynamically injected -->
-      </div>
+      <div class="modal-body" id="orderModalBody"></div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('orderDetailsModal')">Close</button>
       </div>
@@ -708,11 +878,8 @@
   <!-- =========================================================================
        5. JavaScript Execution
        ========================================================================= -->
-  <!-- Supabase CDN (Official Client) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Supabase Client Init -->
   <script src="supabaseClient.js"></script>
-  <!-- Application Logic & Download Animation -->
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,25 +1,57 @@
 /**
- * Antigravity Admin Portal - Application Logic & Interactive Engine
- * Handles State, CRUD, Supabase Sync & Download Animation Switch
+ * Antigravity Admin Portal - Multi-Role Engine (Super Admin & Shop Owner)
+ * Supports Super Admin (Dashboard & Register Shops) and Store Owner (Merchant Backstage)
  */
 
 // =============================================================================
-// 1. Initial State & Rich Dummy Dataset
+// 1. Initial State & Rich Datasets
 // =============================================================================
 
-const DEFAULT_SHOP = {
-  id: 'shop_bench_01',
-  name: 'Bench Philippines',
-  code: 'BENCH',
-  email: 'merchant@bench.com',
-  currency: 'PHP',
-  vton_enabled: false // Default to uninstalled so user can experience the download animation!
+// Registered Shops (Managed by Super Admin)
+let shops = JSON.parse(localStorage.getItem('antigravity_platform_shops')) || [
+  {
+    id: 'shop_bench_01',
+    name: 'Bench Philippines',
+    code: 'BENCH',
+    ownerName: 'Juan Dela Cruz',
+    ownerEmail: 'owner@bench.com',
+    category: 'Casual & Streetwear',
+    vton_enabled: false,
+    joinedDate: 'Oct 10, 2026'
+  },
+  {
+    id: 'shop_zara_02',
+    name: 'Zara Manila',
+    code: 'ZARA',
+    ownerName: 'Maria Santos',
+    ownerEmail: 'owner@zara.com',
+    category: 'Luxury & Formalwear',
+    vton_enabled: true,
+    joinedDate: 'Oct 12, 2026'
+  },
+  {
+    id: 'shop_uniqlo_03',
+    name: 'Uniqlo Hub',
+    code: 'UNIQLO',
+    ownerName: 'Kenji Sato',
+    ownerEmail: 'owner@uniqlo.com',
+    category: 'Denim & Apparel',
+    vton_enabled: true,
+    joinedDate: 'Oct 14, 2026'
+  }
+];
+
+// Current logged in user profile (role: 'admin' or 'owner')
+let currentUser = JSON.parse(localStorage.getItem('antigravity_current_user')) || {
+  email: 'owner@bench.com',
+  name: 'Juan Dela Cruz',
+  role: 'owner', // 'admin' or 'owner'
+  shopId: 'shop_bench_01'
 };
 
-let currentShop = JSON.parse(localStorage.getItem('antigravity_admin_shop')) || DEFAULT_SHOP;
 let isLoggedIn = localStorage.getItem('antigravity_admin_auth') === 'true';
 
-// Dummy Garments Dataset
+// Dummy Garments Dataset (For Shop Owner)
 let products = JSON.parse(localStorage.getItem('antigravity_admin_products')) || [
   {
     id: 'prod-001',
@@ -171,7 +203,6 @@ let orders = JSON.parse(localStorage.getItem('antigravity_admin_orders')) || [
   }
 ];
 
-// Dummy Live Customer Activity Feed
 const liveFeedData = [
   { icon: 'fa-user-check', color: '#10b981', title: 'Fit Recommended: Size M', time: '2m ago', desc: 'Customer scanned Bench Slim Shirt (Confidence 98%)' },
   { icon: 'fa-camera-retro', color: '#06b6d4', title: 'Virtual Try-On Rendered', time: '6m ago', desc: 'Fashn AI generated preview for Floral Midi Dress' },
@@ -185,7 +216,8 @@ const liveFeedData = [
 
 document.addEventListener('DOMContentLoaded', () => {
   initAuthUI();
-  updateShopUI();
+  applyRoleNavigation();
+  renderSuperShops();
   renderProducts();
   renderCategories();
   renderOrders();
@@ -194,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updatePluginStateUI();
 });
 
-// Toast notification helper
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -209,7 +240,7 @@ function showToast(message, type = 'info') {
 }
 
 // =============================================================================
-// 3. Auth Flow (Login & Register Shop)
+// 3. Multi-Role Authentication Flow (Super Admin vs Shop Owner)
 // =============================================================================
 
 function initAuthUI() {
@@ -221,117 +252,149 @@ function initAuthUI() {
   }
 }
 
-function switchAuthTab(mode) {
-  const loginBtn = document.getElementById('tabBtnLogin');
-  const regBtn = document.getElementById('tabBtnRegister');
-  const loginForm = document.getElementById('loginForm');
-  const regForm = document.getElementById('registerForm');
-
-  if (mode === 'login') {
-    loginBtn.classList.add('active');
-    regBtn.classList.remove('active');
-    loginForm.style.display = 'flex';
-    regForm.style.display = 'none';
-  } else {
-    regBtn.classList.add('active');
-    loginBtn.classList.remove('active');
-    regForm.style.display = 'flex';
-    loginForm.style.display = 'none';
-  }
+// Quick 1-Click Login: Super Admin
+function loginAsSuperAdmin() {
+  currentUser = {
+    email: 'admin@antigravity.io',
+    name: 'Super Administrator',
+    role: 'admin',
+    shopId: null
+  };
+  completeLogin('Super Admin Console');
 }
 
+// Quick 1-Click Login: Store Owner
+function loginAsStoreOwner() {
+  currentUser = {
+    email: 'owner@bench.com',
+    name: 'Bench Store Owner',
+    role: 'owner',
+    shopId: 'shop_bench_01'
+  };
+  completeLogin('Bench Merchant Backstage');
+}
+
+// Standard Form Login
 function handleLogin(e) {
   e.preventDefault();
-  const idInput = document.getElementById('loginId').value.trim();
-  
-  isLoggedIn = true;
-  localStorage.setItem('antigravity_admin_auth', 'true');
-  
-  document.getElementById('authWrapper').classList.add('hidden');
-  showToast(`Welcome back, ${currentShop.name} Admin!`, 'success');
-  updateShopUI();
+  const email = document.getElementById('loginId').value.trim().toLowerCase();
+
+  if (email.includes('admin') || email === 'superadmin@antigravity.io') {
+    currentUser = {
+      email: email,
+      name: 'Super Administrator',
+      role: 'admin',
+      shopId: null
+    };
+  } else {
+    const matchedShop = shops.find(s => s.ownerEmail.toLowerCase() === email) || shops[0];
+    currentUser = {
+      email: email,
+      name: matchedShop.ownerName,
+      role: 'owner',
+      shopId: matchedShop.id
+    };
+  }
+
+  completeLogin(currentUser.role === 'admin' ? 'Super Admin Console' : `${getCurrentShop().name} Merchant Portal`);
 }
 
-function handleRegister(e) {
-  e.preventDefault();
-  const name = document.getElementById('regShopName').value.trim();
-  const code = document.getElementById('regShopCode').value.trim().toUpperCase();
-  const email = document.getElementById('regEmail').value.trim();
-
-  currentShop = {
-    id: `shop_${code.toLowerCase()}_${Date.now()}`,
-    name: name,
-    code: code,
-    email: email,
-    currency: 'PHP',
-    vton_enabled: false
-  };
-
-  localStorage.setItem('antigravity_admin_shop', JSON.stringify(currentShop));
+function completeLogin(title) {
   isLoggedIn = true;
   localStorage.setItem('antigravity_admin_auth', 'true');
+  localStorage.setItem('antigravity_current_user', JSON.stringify(currentUser));
 
   document.getElementById('authWrapper').classList.add('hidden');
-  showToast(`Shop "${name}" registered and connected successfully!`, 'success');
-  updateShopUI();
-}
+  showToast(`Signed in successfully to ${title}`, 'success');
 
-function demoLogin() {
-  currentShop = DEFAULT_SHOP;
-  localStorage.setItem('antigravity_admin_shop', JSON.stringify(currentShop));
-  isLoggedIn = true;
-  localStorage.setItem('antigravity_admin_auth', 'true');
-  
-  document.getElementById('authWrapper').classList.add('hidden');
-  showToast('Instant demo session activated (Bench Store).', 'success');
-  updateShopUI();
+  applyRoleNavigation();
 }
 
 function handleLogout() {
   isLoggedIn = false;
   localStorage.removeItem('antigravity_admin_auth');
   document.getElementById('authWrapper').classList.remove('hidden');
-  showToast('Logged out of merchant portal.', 'info');
+  showToast('Logged out of session.', 'info');
 }
 
-function updateShopUI() {
-  document.getElementById('sidebarShopTitle').textContent = currentShop.name;
-  document.getElementById('userDisplayName').textContent = currentShop.name;
-  document.getElementById('userStoreCode').textContent = `CODE: ${currentShop.code}`;
-  document.getElementById('avatarLetter').textContent = (currentShop.name[0] || 'B').toUpperCase();
-  
-  // Settings tab form values
-  const nameInput = document.getElementById('settingStoreName');
-  const codeInput = document.getElementById('settingStoreCode');
-  const emailInput = document.getElementById('settingStoreEmail');
-  if (nameInput) nameInput.value = currentShop.name;
-  if (codeInput) codeInput.value = currentShop.code;
-  if (emailInput) emailInput.value = currentShop.email;
+function getCurrentShop() {
+  return shops.find(s => s.id === currentUser.shopId) || shops[0];
 }
 
 // =============================================================================
-// 4. Tab Navigation
+// 4. Role Navigation Configuration (Super Admin vs Store Owner)
 // =============================================================================
+
+function applyRoleNavigation() {
+  const superNav = document.getElementById('superAdminNav');
+  const ownerNav = document.getElementById('storeOwnerNav');
+  const brandIcon = document.getElementById('sidebarBrandIcon');
+  const title = document.getElementById('sidebarShopTitle');
+  const roleSub = document.getElementById('sidebarRoleSubtitle');
+  const topRoleBadge = document.getElementById('topRoleBadge');
+  const topRoleText = document.getElementById('topRoleText');
+  const userDisplayName = document.getElementById('userDisplayName');
+  const userStoreCode = document.getElementById('userStoreCode');
+  const avatarLetter = document.getElementById('avatarLetter');
+
+  if (currentUser.role === 'admin') {
+    // Super Admin View
+    superNav.style.display = 'flex';
+    ownerNav.style.display = 'none';
+
+    brandIcon.innerHTML = '<i class="fa-solid fa-shield-halved"></i>';
+    brandIcon.style.background = 'linear-gradient(135deg, #6366f1, #3b82f6)';
+    title.textContent = 'Antigravity HQ';
+    roleSub.textContent = 'Platform Governance';
+
+    topRoleBadge.className = 'badge badge-indigo';
+    topRoleBadge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> <span>Super Admin</span>';
+
+    userDisplayName.textContent = 'Super Administrator';
+    userStoreCode.textContent = 'PLATFORM OWNER';
+    avatarLetter.textContent = 'SA';
+
+    switchTab('super-dashboard');
+  } else {
+    // Store Owner View
+    superNav.style.display = 'none';
+    ownerNav.style.display = 'flex';
+
+    const shop = getCurrentShop();
+    brandIcon.innerHTML = '<i class="fa-solid fa-vest-patches"></i>';
+    brandIcon.style.background = 'linear-gradient(135deg, var(--primary), var(--accent-cyan))';
+    title.textContent = shop.name;
+    roleSub.textContent = 'Merchant Backstage';
+
+    topRoleBadge.className = 'badge badge-cyan';
+    topRoleBadge.innerHTML = '<i class="fa-solid fa-store"></i> <span>Store Owner</span>';
+
+    userDisplayName.textContent = shop.name;
+    userStoreCode.textContent = `CODE: ${shop.code}`;
+    avatarLetter.textContent = (shop.name[0] || 'B').toUpperCase();
+
+    // Fill settings inputs
+    const nameInput = document.getElementById('settingStoreName');
+    const codeInput = document.getElementById('settingStoreCode');
+    const emailInput = document.getElementById('settingStoreEmail');
+    if (nameInput) nameInput.value = shop.name;
+    if (codeInput) codeInput.value = shop.code;
+    if (emailInput) emailInput.value = shop.ownerEmail;
+
+    switchTab('dashboard');
+  }
+}
 
 function switchTab(tabName) {
-  // Update sidebar active classes
+  // Update nav item active states
   document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
     item.classList.remove('active');
   });
-  
-  const navMap = {
-    'dashboard': 0,
-    'products': 1,
-    'categories': 2,
-    'orders': 3,
-    'settings': 4
-  };
-  const items = document.querySelectorAll('.sidebar-nav .nav-item');
-  if (items[navMap[tabName]]) {
-    items[navMap[tabName]].classList.add('active');
-  }
 
-  // Update main content views
+  const activeLinks = document.querySelectorAll(`a[onclick="switchTab('${tabName}')"]`);
+  activeLinks.forEach(link => link.classList.add('active'));
+
+  // Switch tab visibility
   document.querySelectorAll('.tab-view').forEach(view => {
     view.classList.remove('active');
   });
@@ -339,9 +402,10 @@ function switchTab(tabName) {
   const targetView = document.getElementById(`tab-${tabName}`);
   if (targetView) targetView.classList.add('active');
 
-  // Update Page Title
   const titles = {
-    'dashboard': 'Dashboard Overview',
+    'super-dashboard': 'Super Admin | Platform Overview',
+    'super-shops': 'Super Admin | Registered Shops Management',
+    'dashboard': 'Store Dashboard Overview',
     'products': 'Garment Product Catalog',
     'categories': 'Apparel Categories & Rules',
     'orders': 'Customer Orders & Fit Breakdown',
@@ -351,14 +415,144 @@ function switchTab(tabName) {
 }
 
 // =============================================================================
-// 5. THE STAR FEATURE: Interactive Download Animation Toggle
+// 5. Super Admin Functions: Register New Shop & Directory
+// =============================================================================
+
+function renderSuperShops() {
+  const allTbody = document.getElementById('superAllShopsTbody');
+  const recentTbody = document.getElementById('superRecentShopsTbody');
+  const countBadge = document.getElementById('sidebarSuperShopsCount');
+  const statBadge = document.getElementById('superStatShops');
+
+  if (countBadge) countBadge.textContent = shops.length;
+  if (statBadge) statBadge.textContent = shops.length;
+
+  const searchVal = (document.getElementById('shopSearchInput')?.value || '').toLowerCase();
+  const filtered = shops.filter(s => 
+    s.name.toLowerCase().includes(searchVal) || 
+    s.code.toLowerCase().includes(searchVal) || 
+    s.ownerEmail.toLowerCase().includes(searchVal) ||
+    s.ownerName.toLowerCase().includes(searchVal)
+  );
+
+  const renderRow = (s, isRecent = false) => `
+    <tr>
+      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">${s.code}</span></td>
+      <td>
+        <strong>${s.name}</strong>
+      </td>
+      <td>
+        <div style="font-weight: 600;">${s.ownerName}</div>
+        ${isRecent ? `<div style="font-size: 0.74rem; color: var(--text-dim);">${s.ownerEmail}</div>` : ''}
+      </td>
+      ${!isRecent ? `<td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${s.ownerEmail}</span></td>` : ''}
+      <td><span class="badge badge-indigo">${s.category}</span></td>
+      <td>
+        <span class="badge ${s.vton_enabled ? 'badge-emerald' : 'badge-amber'}">
+          <i class="fa-solid ${s.vton_enabled ? 'fa-circle-check' : 'fa-clock'}"></i>
+          ${s.vton_enabled ? 'Active in App' : 'Not Activated'}
+        </span>
+      </td>
+      ${isRecent ? `<td><span style="color: var(--text-dim); font-size: 0.78rem;">${s.joinedDate}</span></td>` : ''}
+      ${!isRecent ? `
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="toggleShopVton('${s.id}')" title="Toggle VTON">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Toggle VTON
+          </button>
+        </td>
+      ` : ''}
+    </tr>
+  `;
+
+  if (allTbody) {
+    allTbody.innerHTML = filtered.map(s => renderRow(s, false)).join('');
+  }
+  if (recentTbody) {
+    recentTbody.innerHTML = shops.slice(0, 3).map(s => renderRow(s, true)).join('');
+  }
+}
+
+function filterShops() {
+  renderSuperShops();
+}
+
+function openRegisterShopModal() {
+  document.getElementById('newShopName').value = '';
+  document.getElementById('newShopCode').value = '';
+  document.getElementById('newOwnerName').value = '';
+  document.getElementById('newOwnerEmail').value = '';
+  document.getElementById('newOwnerPassword').value = 'password123';
+  openModal('registerShopModal');
+}
+
+// Super Admin Registers a New Merchant Shop
+async function handleSuperRegisterShop(e) {
+  e.preventDefault();
+  const name = document.getElementById('newShopName').value.trim();
+  const code = document.getElementById('newShopCode').value.trim().toUpperCase();
+  const category = document.getElementById('newShopCategory').value;
+  const ownerName = document.getElementById('newOwnerName').value.trim();
+  const ownerEmail = document.getElementById('newOwnerEmail').value.trim();
+  const ownerPassword = document.getElementById('newOwnerPassword').value;
+
+  const newShop = {
+    id: `shop_${code.toLowerCase()}_${Date.now()}`,
+    name,
+    code,
+    ownerName,
+    ownerEmail,
+    category,
+    vton_enabled: false,
+    joinedDate: 'Today'
+  };
+
+  // Add to local list
+  shops.unshift(newShop);
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
+  // Sync to Supabase if client is ready
+  if (window.db && window.db.client) {
+    try {
+      // 1. Create shop row in public.shops
+      await window.db.client.from('shops').insert({
+        store_code: code,
+        name: name,
+        description: `${category} merchant store.`,
+        vton_enabled: false
+      });
+      console.log('✅ Synchronized new shop with Supabase public.shops');
+    } catch (err) {
+      console.warn('Supabase sync note:', err.message);
+    }
+  }
+
+  closeModal('registerShopModal');
+  showToast(`🎉 Shop "${name}" (${code}) provisioned successfully!`, 'success');
+  renderSuperShops();
+}
+
+function toggleShopVton(shopId) {
+  const s = shops.find(item => item.id === shopId);
+  if (!s) return;
+  s.vton_enabled = !s.vton_enabled;
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  if (window.db && window.db.updateVtonStatus) {
+    window.db.updateVtonStatus(shopId, s.vton_enabled);
+  }
+  showToast(`Updated Virtual Try-On for ${s.name}: ${s.vton_enabled ? 'Active' : 'Disabled'}`, 'info');
+  renderSuperShops();
+}
+
+// =============================================================================
+// 6. Shop Owner: Interactive Download Animation Toggle
 // =============================================================================
 
 let isDownloading = false;
 
 function triggerPluginDownloadAnimation() {
   if (isDownloading) return;
-  if (currentShop.vton_enabled) return;
+  const shop = getCurrentShop();
+  if (shop.vton_enabled) return;
 
   isDownloading = true;
 
@@ -368,9 +562,7 @@ function triggerPluginDownloadAnimation() {
   const progressFill = document.getElementById('downloadProgressFill');
   const percentText = document.getElementById('downloadPercentText');
   const stepsLog = document.getElementById('downloadStepsLog');
-  const stateLabel = document.getElementById('downloadStateLabel');
 
-  // Enter Downloading State UI
   container.classList.add('is-downloading');
   downloadBtn.disabled = true;
   downloadBtn.style.opacity = '0.7';
@@ -380,14 +572,14 @@ function triggerPluginDownloadAnimation() {
 
   const steps = [
     { at: 10, label: 'Resolving dependency: body_measurement_plugin v1.2.0...' },
-    { at: 35, label: 'Downloading Google ML Kit Pose Estimation neural weights (12.4 MB)...' },
+    { at: 35, label: 'Downloading Google ML Kit Pose Estimation weights (12.4 MB)...' },
     { at: 65, label: 'Compiling circumference calculation & size matching matrices...' },
     { at: 88, label: 'Connecting to Supabase Cloud & configuring shops.vton_enabled...' },
     { at: 100, label: 'Finalizing installation & starting real-time mobile sync...' }
   ];
 
   let currentPercent = 0;
-  const durationMs = 3200; // 3.2 seconds total animation
+  const durationMs = 3000;
   const intervalMs = 40;
   const stepIncrement = 100 / (durationMs / intervalMs);
 
@@ -398,14 +590,12 @@ function triggerPluginDownloadAnimation() {
     progressFill.style.width = `${Math.floor(currentPercent)}%`;
     percentText.textContent = `${Math.floor(currentPercent)}%`;
 
-    // Update step message
     for (let s of steps) {
       if (currentPercent >= s.at) {
         stepsLog.innerHTML = `<i class="fa-solid fa-gear fa-spin" style="color: var(--accent-cyan);"></i> <span>${s.label}</span>`;
       }
     }
 
-    // Completion
     if (currentPercent >= 100) {
       clearInterval(downloadTimer);
       setTimeout(() => {
@@ -417,33 +607,37 @@ function triggerPluginDownloadAnimation() {
 
 function finishDownloadAnimation() {
   isDownloading = false;
-  currentShop.vton_enabled = true;
-  localStorage.setItem('antigravity_admin_shop', JSON.stringify(currentShop));
+  const shop = getCurrentShop();
+  shop.vton_enabled = true;
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
-  // Sync to Supabase
   if (window.db && window.db.updateVtonStatus) {
-    window.db.updateVtonStatus(currentShop.id, true);
+    window.db.updateVtonStatus(shop.id, true);
   }
 
   showToast('🎉 Body Measurement & Virtual Try-On Plugin is now ACTIVE on Mobile!', 'success');
   updatePluginStateUI();
+  renderSuperShops();
 }
 
 function deactivatePlugin() {
-  if (confirm('Are you sure you want to disable Virtual Try-On? Shoppers on your mobile app will no longer see the 1-Click Try-On button.')) {
-    currentShop.vton_enabled = false;
-    localStorage.setItem('antigravity_admin_shop', JSON.stringify(currentShop));
+  if (confirm('Are you sure you want to disable Virtual Try-On? Shoppers on your mobile app will no longer see the Try-On button.')) {
+    const shop = getCurrentShop();
+    shop.vton_enabled = false;
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     if (window.db && window.db.updateVtonStatus) {
-      window.db.updateVtonStatus(currentShop.id, false);
+      window.db.updateVtonStatus(shop.id, false);
     }
 
     showToast('Virtual Try-On plugin disabled.', 'info');
     updatePluginStateUI();
+    renderSuperShops();
   }
 }
 
 function updatePluginStateUI() {
+  const shop = getCurrentShop();
   const container = document.getElementById('downloadToggleContainer');
   const downloadBtn = document.getElementById('btnStartDownload');
   const progressTrack = document.getElementById('downloadProgressTrack');
@@ -454,8 +648,9 @@ function updatePluginStateUI() {
   const sidebarBadge = document.getElementById('sidebarPluginBadge');
   const bannerStatus = document.getElementById('bannerPluginStatus');
 
-  if (currentShop.vton_enabled) {
-    // Installed & Active State
+  if (!container) return;
+
+  if (shop.vton_enabled) {
     container.classList.add('active-mode');
     container.classList.remove('is-downloading');
     downloadBtn.style.display = 'none';
@@ -465,19 +660,20 @@ function updatePluginStateUI() {
     percentText.style.color = '#10b981';
     stepsLog.innerHTML = '<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> <span>Synchronized with customer mobile app & Fashn AI API.</span>';
     
-    sidebarBadge.textContent = 'VTON Active';
-    sidebarBadge.classList.add('plugin-live');
+    if (sidebarBadge) {
+      sidebarBadge.textContent = 'VTON Active';
+      sidebarBadge.classList.add('plugin-live');
+    }
     if (bannerStatus) {
       bannerStatus.textContent = 'Active on Mobile App';
       bannerStatus.style.color = '#10b981';
     }
   } else {
-    // Uninstalled / Ready to download State
     container.classList.remove('active-mode', 'is-downloading');
     downloadBtn.style.display = 'flex';
     downloadBtn.disabled = false;
     downloadBtn.style.opacity = '1';
-    downloadBtn.innerHTML = '<i class="fa-solid fa-download download-arrow-icon"></i> <span id="btnDownloadText">Install & Activate Plugin</span>';
+    downloadBtn.innerHTML = '<i class="fa-solid fa-download download-arrow-icon"></i> <span>Install & Activate Plugin</span>';
     progressTrack.style.display = 'none';
     progressFill.style.width = '0%';
     installedView.style.display = 'none';
@@ -485,8 +681,10 @@ function updatePluginStateUI() {
     percentText.style.color = 'var(--accent-cyan)';
     stepsLog.innerHTML = '<span>Click to install neural weights & size matching engine.</span>';
     
-    sidebarBadge.textContent = 'VTON Inactive';
-    sidebarBadge.classList.remove('plugin-live');
+    if (sidebarBadge) {
+      sidebarBadge.textContent = 'VTON Inactive';
+      sidebarBadge.classList.remove('plugin-live');
+    }
     if (bannerStatus) {
       bannerStatus.textContent = 'Not Installed';
       bannerStatus.style.color = '#f59e0b';
@@ -495,7 +693,7 @@ function updatePluginStateUI() {
 }
 
 // =============================================================================
-// 6. Products CRUD & Rendering
+// 7. Products CRUD & Rendering (For Shop Owners)
 // =============================================================================
 
 function renderProducts() {
@@ -513,15 +711,16 @@ function renderProducts() {
     return matchesSearch && matchesCat && matchesGender;
   });
 
-  document.getElementById('sidebarProductCount').textContent = products.length;
-  document.getElementById('statProducts').textContent = products.length;
+  const countBadge = document.getElementById('sidebarProductCount');
+  const statBadge = document.getElementById('statProducts');
+  if (countBadge) countBadge.textContent = products.length;
+  if (statBadge) statBadge.textContent = products.length;
 
   if (filtered.length === 0) {
     container.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 48px; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle);">
         <i class="fa-solid fa-shirt" style="font-size: 2.5rem; color: var(--text-dim); margin-bottom: 12px;"></i>
         <h4 style="font-size: 1.1rem; color: var(--text-muted);">No garment products found</h4>
-        <p style="font-size: 0.82rem; color: var(--text-dim); margin-top: 4px;">Try adjusting your filters or add a new product.</p>
       </div>
     `;
     return;
@@ -539,7 +738,7 @@ function renderProducts() {
         <div class="product-price">$${p.price.toFixed(2)}</div>
         <div class="product-sizes">
           ${Object.entries(p.stock).map(([size, count]) => `
-            <span class="size-pill ${count > 0 ? 'has-stock' : ''}" title="${count} in stock">
+            <span class="size-pill ${count > 0 ? 'has-stock' : ''}">
               ${size}: ${count}
             </span>
           `).join('')}
@@ -550,10 +749,10 @@ function renderProducts() {
             <span>${Object.values(p.stock).reduce((a, b) => a + b, 0)} Total Stock</span>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')" title="Edit Product">
+            <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose);" onclick="deleteProduct('${p.id}')" title="Delete">
+            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose);" onclick="deleteProduct('${p.id}')">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
@@ -579,7 +778,6 @@ function openAddProductModal() {
   document.getElementById('stockM').value = 25;
   document.getElementById('stockL').value = 20;
   document.getElementById('stockXL').value = 10;
-  
   openModal('addProductModal');
 }
 
@@ -621,7 +819,7 @@ function handleSaveProduct(e) {
     const idx = products.findIndex(p => p.id === editId);
     if (idx !== -1) {
       products[idx] = { ...products[idx], title, price, category, gender, imageUrl, stock };
-      showToast('Garment product updated successfully!', 'success');
+      showToast('Product updated successfully!', 'success');
     }
   } else {
     const newProduct = {
@@ -653,7 +851,7 @@ function deleteProduct(prodId) {
 }
 
 // =============================================================================
-// 7. Categories CRUD & Rendering
+// 8. Categories & Orders
 // =============================================================================
 
 function renderCategories() {
@@ -686,24 +884,19 @@ function handleSaveCategory(e) {
   const icon = document.getElementById('catIcon').value.trim();
   const desc = document.getElementById('catDesc').value.trim();
 
-  const newCat = {
+  categories.push({
     id: `cat-${Date.now()}`,
     name,
     icon: icon.startsWith('fa-') ? icon : `fa-${icon}`,
     count: 0,
     desc
-  };
+  });
 
-  categories.push(newCat);
   localStorage.setItem('antigravity_admin_categories', JSON.stringify(categories));
   closeModal('addCategoryModal');
-  showToast(`Category "${name}" created!`, 'success');
+  showToast(`Category "${name}" added!`, 'success');
   renderCategories();
 }
-
-// =============================================================================
-// 8. Orders Management & Details Modal
-// =============================================================================
 
 function renderOrders() {
   const tbody = document.getElementById('allOrdersTbody');
@@ -719,7 +912,8 @@ function renderOrders() {
     return matchesSearch && matchesStatus;
   });
 
-  document.getElementById('sidebarOrderCount').textContent = orders.length;
+  const countBadge = document.getElementById('sidebarOrderCount');
+  if (countBadge) countBadge.textContent = orders.length;
 
   const renderRow = (o, isRecent = false) => `
     <tr>
@@ -773,24 +967,12 @@ function viewOrderDetails(orderId) {
         <strong>${o.customer}</strong>
       </div>
       <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Order Date:</span>
-        <span>${o.date}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
         <span style="color: var(--text-muted);">Garment Item:</span>
         <span>${o.item}</span>
       </div>
       <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
         <span style="color: var(--text-muted);">Selected Size:</span>
-        <span class="badge badge-emerald"><i class="fa-solid fa-check"></i> ${o.size} (Recommended by Body Scan)</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Payment Method:</span>
-        <span>${o.payment}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Status:</span>
-        <span class="badge badge-emerald">${o.status}</span>
+        <span class="badge badge-emerald"><i class="fa-solid fa-check"></i> ${o.size} (AI Body Scan Recommended)</span>
       </div>
       <div style="display: flex; justify-content: space-between; padding-top: 6px; font-size: 1.1rem;">
         <span style="font-weight: 700;">Total Charged:</span>
@@ -801,10 +983,6 @@ function viewOrderDetails(orderId) {
 
   openModal('orderDetailsModal');
 }
-
-// =============================================================================
-// 9. Dashboard Analytics & Feed
-// =============================================================================
 
 function renderLiveFeed() {
   const container = document.getElementById('liveFeedContainer');
@@ -828,32 +1006,26 @@ function renderLiveFeed() {
 
 function renderStats() {
   const totalSales = orders.reduce((sum, o) => sum + o.total, 0) + 148000;
-  document.getElementById('statRevenue').textContent = `$${totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  document.getElementById('statOrders').textContent = (orders.length + 1477).toLocaleString();
+  const revElem = document.getElementById('statRevenue');
+  const ordElem = document.getElementById('statOrders');
+  if (revElem) revElem.textContent = `$${totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (ordElem) ordElem.textContent = (orders.length + 1477).toLocaleString();
 }
 
 function saveStoreSettings(e) {
   e.preventDefault();
-  const name = document.getElementById('settingStoreName').value.trim();
-  const code = document.getElementById('settingStoreCode').value.trim().toUpperCase();
-  const email = document.getElementById('settingStoreEmail').value.trim();
-  const currency = document.getElementById('settingCurrency').value;
+  const shop = getCurrentShop();
+  shop.name = document.getElementById('settingStoreName').value.trim();
+  shop.code = document.getElementById('settingStoreCode').value.trim().toUpperCase();
+  shop.ownerEmail = document.getElementById('settingStoreEmail').value.trim();
 
-  currentShop = {
-    ...currentShop,
-    name,
-    code,
-    email,
-    currency
-  };
-
-  localStorage.setItem('antigravity_admin_shop', JSON.stringify(currentShop));
-  updateShopUI();
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  applyRoleNavigation();
   showToast('Store settings saved successfully!', 'success');
 }
 
 // =============================================================================
-// 10. Modal Utilities
+// 9. Modal Helpers
 // =============================================================================
 
 function openModal(modalId) {
@@ -866,7 +1038,6 @@ function closeModal(modalId) {
   if (modal) modal.classList.remove('active');
 }
 
-// Close modal on escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay.active').forEach(modal => {
