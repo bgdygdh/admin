@@ -1,13 +1,14 @@
 /**
  * Antigravity Admin Portal - Multi-Role Engine (Super Admin & Shop Owner)
  * Supports Super Admin (Dashboard & Register Shops) and Store Owner (Merchant Backstage)
+ * Fully connected to Supabase Cloud Authentication & PostgreSQL Database
  */
 
 // =============================================================================
-// 1. Initial State & Rich Datasets
+// 1. Initial State & Datasets
 // =============================================================================
 
-// Registered Shops (Managed by Super Admin)
+// Registered Shops (Synchronized with Supabase public.shops)
 let shops = JSON.parse(localStorage.getItem('antigravity_platform_shops')) || [
   {
     id: 'shop_bench_01',
@@ -41,12 +42,11 @@ let shops = JSON.parse(localStorage.getItem('antigravity_platform_shops')) || [
   }
 ];
 
-// Current logged in user profile (role: 'admin' or 'owner')
 let currentUser = JSON.parse(localStorage.getItem('antigravity_current_user')) || {
-  email: 'owner@bench.com',
-  name: 'Juan Dela Cruz',
-  role: 'owner', // 'admin' or 'owner'
-  shopId: 'shop_bench_01'
+  email: 'admin@antigravity.io',
+  name: 'Super Administrator',
+  role: 'admin',
+  shopId: null
 };
 
 let isLoggedIn = localStorage.getItem('antigravity_admin_auth') === 'true';
@@ -214,29 +214,47 @@ const liveFeedData = [
 // 2. Initialization & Lifecycle
 // =============================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initAuthUI();
   applyRoleNavigation();
-  renderSuperShops();
   renderProducts();
   renderCategories();
   renderOrders();
   renderLiveFeed();
   renderStats();
   updatePluginStateUI();
+
+  // Load live data from Supabase Cloud
+  await syncSupabaseShops();
 });
+
+// Sync registered shops from Supabase
+async function syncSupabaseShops() {
+  if (window.db && window.db.fetchShops) {
+    const liveShops = await window.db.fetchShops();
+    if (liveShops && liveShops.length > 0) {
+      shops = liveShops;
+      localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+      renderSuperShops();
+    } else {
+      renderSuperShops();
+    }
+  } else {
+    renderSuperShops();
+  }
+}
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-info'}"></i> <span>${message}</span>`;
+  toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-info')}"></i> <span>${message}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(10px)';
     setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  }, 4000);
 }
 
 // =============================================================================
@@ -274,29 +292,79 @@ function loginAsStoreOwner() {
   completeLogin('Bench Merchant Backstage');
 }
 
-// Standard Form Login
-function handleLogin(e) {
+// Live Supabase Authentication Form
+async function handleLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('loginId').value.trim().toLowerCase();
+  const emailInput = document.getElementById('loginId');
+  const passInput = document.getElementById('loginPassword');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
 
-  if (email.includes('admin') || email === 'superadmin@antigravity.io') {
+  const email = emailInput.value.trim();
+  const password = passInput.value;
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying credentials...';
+
+  // 1. Authenticate with Supabase Cloud
+  if (window.db && window.db.login) {
+    const res = await window.db.login(email, password);
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Dashboard';
+
+    if (!res.success) {
+      if (res.isCustomer) {
+        // ⛔ Specific requirement: Customer accounts are banned from admin portal
+        showToast('⛔ Access Denied: Customer accounts are prohibited from accessing this admin portal. Please use the customer mobile app.', 'error');
+      } else {
+        showToast(`Login failed: ${res.error}`, 'error');
+      }
+      return;
+    }
+
+    // Success: Populate authenticated session
     currentUser = {
-      email: email,
-      name: 'Super Administrator',
-      role: 'admin',
-      shopId: null
+      id: res.user.id,
+      email: res.profile.email,
+      name: res.profile.full_name || 'Authenticated User',
+      role: res.role,
+      shopId: res.shop?.id || null
     };
+
+    if (res.shop) {
+      // Add or update shop in local list
+      const existingIdx = shops.findIndex(s => s.id === res.shop.id);
+      if (existingIdx !== -1) {
+        shops[existingIdx] = { ...shops[existingIdx], ...res.shop };
+      } else {
+        shops.push({
+          id: res.shop.id,
+          name: res.shop.name,
+          code: res.shop.store_code,
+          ownerName: res.profile.full_name,
+          ownerEmail: res.profile.email,
+          category: res.shop.description || 'Fashion Store',
+          vton_enabled: res.shop.vton_enabled === true
+        });
+      }
+      localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+    }
+
+    completeLogin(res.role === 'admin' ? 'Super Admin Console' : `${getCurrentShop().name} Merchant Portal`);
+
   } else {
-    const matchedShop = shops.find(s => s.ownerEmail.toLowerCase() === email) || shops[0];
-    currentUser = {
-      email: email,
-      name: matchedShop.ownerName,
-      role: 'owner',
-      shopId: matchedShop.id
-    };
-  }
+    // Offline simulation fallback
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Dashboard';
 
-  completeLogin(currentUser.role === 'admin' ? 'Super Admin Console' : `${getCurrentShop().name} Merchant Portal`);
+    if (email.includes('admin')) {
+      currentUser = { email, name: 'Super Administrator', role: 'admin', shopId: null };
+    } else {
+      const matched = shops.find(s => s.ownerEmail.toLowerCase() === email.toLowerCase()) || shops[0];
+      currentUser = { email, name: matched.ownerName, role: 'owner', shopId: matched.id };
+    }
+    completeLogin(currentUser.role === 'admin' ? 'Super Admin Console' : `${getCurrentShop().name} Merchant Portal`);
+  }
 }
 
 function completeLogin(title) {
@@ -305,12 +373,16 @@ function completeLogin(title) {
   localStorage.setItem('antigravity_current_user', JSON.stringify(currentUser));
 
   document.getElementById('authWrapper').classList.add('hidden');
-  showToast(`Signed in successfully to ${title}`, 'success');
+  showToast(`Welcome! Signed in to ${title}`, 'success');
 
   applyRoleNavigation();
+  syncSupabaseShops();
 }
 
-function handleLogout() {
+async function handleLogout() {
+  if (window.db && window.db.logout) {
+    await window.db.logout();
+  }
   isLoggedIn = false;
   localStorage.removeItem('antigravity_admin_auth');
   document.getElementById('authWrapper').classList.remove('hidden');
@@ -350,7 +422,7 @@ function applyRoleNavigation() {
     topRoleBadge.className = 'badge badge-indigo';
     topRoleBadge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> <span>Super Admin</span>';
 
-    userDisplayName.textContent = 'Super Administrator';
+    userDisplayName.textContent = currentUser.name || 'Super Administrator';
     userStoreCode.textContent = 'PLATFORM OWNER';
     avatarLetter.textContent = 'SA';
 
@@ -386,7 +458,6 @@ function applyRoleNavigation() {
 }
 
 function switchTab(tabName) {
-  // Update nav item active states
   document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
     item.classList.remove('active');
   });
@@ -394,7 +465,6 @@ function switchTab(tabName) {
   const activeLinks = document.querySelectorAll(`a[onclick="switchTab('${tabName}')"]`);
   activeLinks.forEach(link => link.classList.add('active'));
 
-  // Switch tab visibility
   document.querySelectorAll('.tab-view').forEach(view => {
     view.classList.remove('active');
   });
@@ -412,10 +482,15 @@ function switchTab(tabName) {
     'settings': 'Store Settings & Plugin Deployment'
   };
   document.getElementById('pageTitle').textContent = titles[tabName] || 'Overview';
+
+  // Automatically refresh live data from Supabase for Super Admin views
+  if (tabName === 'super-dashboard' || tabName === 'super-shops') {
+    syncSupabaseShops();
+  }
 }
 
 // =============================================================================
-// 5. Super Admin Functions: Register New Shop & Directory
+// 5. Super Admin Functions: Register New Merchant & Shop (LIVE SUPABASE SYNC)
 // =============================================================================
 
 function renderSuperShops() {
@@ -438,9 +513,7 @@ function renderSuperShops() {
   const renderRow = (s, isRecent = false) => `
     <tr>
       <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">${s.code}</span></td>
-      <td>
-        <strong>${s.name}</strong>
-      </td>
+      <td><strong>${s.name}</strong></td>
       <td>
         <div style="font-weight: 600;">${s.ownerName}</div>
         ${isRecent ? `<div style="font-size: 0.74rem; color: var(--text-dim);">${s.ownerEmail}</div>` : ''}
@@ -464,11 +537,37 @@ function renderSuperShops() {
     </tr>
   `;
 
+  // 1. Registered Shops Tab Table (All shops)
   if (allTbody) {
-    allTbody.innerHTML = filtered.map(s => renderRow(s, false)).join('');
+    if (filtered.length === 0) {
+      allTbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+            <i class="fa-solid fa-store" style="font-size: 2rem; color: var(--text-dim); margin-bottom: 10px; display: block;"></i>
+            <strong>No Registered Merchant Stores Found</strong>
+            <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">Click the "+ Register New Shop" button above to add your first store into Supabase.</div>
+          </td>
+        </tr>
+      `;
+    } else {
+      allTbody.innerHTML = filtered.map(s => renderRow(s, false)).join('');
+    }
   }
+
+  // 2. Super Admin Dashboard Tab Table (Recent shops overview)
   if (recentTbody) {
-    recentTbody.innerHTML = shops.slice(0, 3).map(s => renderRow(s, true)).join('');
+    if (shops.length === 0) {
+      recentTbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">
+            <i class="fa-solid fa-store-slash" style="color: var(--text-dim); margin-bottom: 6px; display: block;"></i>
+            No merchant stores registered yet. Provision a new shop to see it here.
+          </td>
+        </tr>
+      `;
+    } else {
+      recentTbody.innerHTML = shops.slice(0, 5).map(s => renderRow(s, true)).join('');
+    }
   }
 }
 
@@ -485,9 +584,11 @@ function openRegisterShopModal() {
   openModal('registerShopModal');
 }
 
-// Super Admin Registers a New Merchant Shop
+// Live Super Admin Provisioning Function
 async function handleSuperRegisterShop(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+
   const name = document.getElementById('newShopName').value.trim();
   const code = document.getElementById('newShopCode').value.trim().toUpperCase();
   const category = document.getElementById('newShopCategory').value;
@@ -495,49 +596,78 @@ async function handleSuperRegisterShop(e) {
   const ownerEmail = document.getElementById('newOwnerEmail').value.trim();
   const ownerPassword = document.getElementById('newOwnerPassword').value;
 
-  const newShop = {
-    id: `shop_${code.toLowerCase()}_${Date.now()}`,
-    name,
-    code,
-    ownerName,
-    ownerEmail,
-    category,
-    vton_enabled: false,
-    joinedDate: 'Today'
-  };
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Provisioning in Supabase...';
 
-  // Add to local list
-  shops.unshift(newShop);
-  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  // 1. Call Supabase backend helper
+  if (window.db && window.db.registerMerchantShop) {
+    const result = await window.db.registerMerchantShop({
+      name,
+      code,
+      category,
+      ownerName,
+      ownerEmail,
+      ownerPassword
+    });
 
-  // Sync to Supabase if client is ready
-  if (window.db && window.db.client) {
-    try {
-      // 1. Create shop row in public.shops
-      await window.db.client.from('shops').insert({
-        store_code: code,
-        name: name,
-        description: `${category} merchant store.`,
-        vton_enabled: false
-      });
-      console.log('✅ Synchronized new shop with Supabase public.shops');
-    } catch (err) {
-      console.warn('Supabase sync note:', err.message);
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Register Shop & Provision';
+
+    if (!result.success) {
+      showToast(`Registration failed: ${result.error}`, 'error');
+      return;
     }
-  }
 
-  closeModal('registerShopModal');
-  showToast(`🎉 Shop "${name}" (${code}) provisioned successfully!`, 'success');
-  renderSuperShops();
+    // Success: Add to local state
+    const newShop = {
+      id: result.shop.id,
+      name: result.shop.name,
+      code: result.shop.store_code,
+      ownerName: ownerName,
+      ownerEmail: ownerEmail,
+      category: category,
+      vton_enabled: false,
+      joinedDate: 'Just now'
+    };
+
+    shops.unshift(newShop);
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
+    closeModal('registerShopModal');
+    showToast(`🎉 Shop "${name}" (${code}) provisioned in Supabase! Owner login: ${ownerEmail}`, 'success');
+    renderSuperShops();
+
+  } else {
+    // Fallback simulation
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Register Shop & Provision';
+
+    const newShop = {
+      id: `shop_${code.toLowerCase()}_${Date.now()}`,
+      name,
+      code,
+      ownerName,
+      ownerEmail,
+      category,
+      vton_enabled: false,
+      joinedDate: 'Today'
+    };
+    shops.unshift(newShop);
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+    closeModal('registerShopModal');
+    showToast(`🎉 Shop "${name}" (${code}) created!`, 'success');
+    renderSuperShops();
+  }
 }
 
-function toggleShopVton(shopId) {
+async function toggleShopVton(shopId) {
   const s = shops.find(item => item.id === shopId);
   if (!s) return;
   s.vton_enabled = !s.vton_enabled;
   localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
   if (window.db && window.db.updateVtonStatus) {
-    window.db.updateVtonStatus(shopId, s.vton_enabled);
+    await window.db.updateVtonStatus(shopId, s.vton_enabled);
   }
   showToast(`Updated Virtual Try-On for ${s.name}: ${s.vton_enabled ? 'Active' : 'Disabled'}`, 'info');
   renderSuperShops();
@@ -605,14 +735,14 @@ function triggerPluginDownloadAnimation() {
   }, intervalMs);
 }
 
-function finishDownloadAnimation() {
+async function finishDownloadAnimation() {
   isDownloading = false;
   const shop = getCurrentShop();
   shop.vton_enabled = true;
   localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
   if (window.db && window.db.updateVtonStatus) {
-    window.db.updateVtonStatus(shop.id, true);
+    await window.db.updateVtonStatus(shop.id, true);
   }
 
   showToast('🎉 Body Measurement & Virtual Try-On Plugin is now ACTIVE on Mobile!', 'success');
@@ -620,14 +750,14 @@ function finishDownloadAnimation() {
   renderSuperShops();
 }
 
-function deactivatePlugin() {
+async function deactivatePlugin() {
   if (confirm('Are you sure you want to disable Virtual Try-On? Shoppers on your mobile app will no longer see the Try-On button.')) {
     const shop = getCurrentShop();
     shop.vton_enabled = false;
     localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     if (window.db && window.db.updateVtonStatus) {
-      window.db.updateVtonStatus(shop.id, false);
+      await window.db.updateVtonStatus(shop.id, false);
     }
 
     showToast('Virtual Try-On plugin disabled.', 'info');
@@ -749,10 +879,10 @@ function renderProducts() {
             <span>${Object.values(p.stock).reduce((a, b) => a + b, 0)} Total Stock</span>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')">
+            <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')" title="Edit Product">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose);" onclick="deleteProduct('${p.id}')">
+            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose);" onclick="deleteProduct('${p.id}')" title="Delete">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
