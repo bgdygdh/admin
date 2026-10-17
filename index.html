@@ -235,7 +235,10 @@
               <h3><i class="fa-solid fa-building" style="color: var(--primary);"></i> Registered Merchant Stores</h3>
               <span class="card-subtitle">Brands currently utilizing the Body Measurement & VTON platform</span>
             </div>
-            <button class="btn btn-outline btn-sm" onclick="switchTab('super-shops')">View Full Directory</button>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-outline btn-sm" onclick="syncSupabaseShops(true)" title="Sync Supabase"><i class="fa-solid fa-arrows-rotate"></i> Sync</button>
+              <button class="btn btn-outline btn-sm" onclick="switchTab('super-shops')">View Full Directory</button>
+            </div>
           </div>
           <div class="table-container">
             <table>
@@ -267,6 +270,9 @@
             <input type="text" id="shopSearchInput" placeholder="Search shops by code, name, or owner..." oninput="filterShops()">
           </div>
           <div class="filter-group">
+            <button class="btn btn-outline" onclick="syncSupabaseShops(true)" title="Force sync with live Supabase database">
+              <i class="fa-solid fa-arrows-rotate"></i> Sync Live Data
+            </button>
             <button class="btn btn-primary" onclick="openRegisterShopModal()">
               <i class="fa-solid fa-plus"></i> Register New Shop
             </button>

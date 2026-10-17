@@ -9,38 +9,10 @@
 // =============================================================================
 
 // Registered Shops (Synchronized with Supabase public.shops)
-let shops = JSON.parse(localStorage.getItem('antigravity_platform_shops')) || [
-  {
-    id: 'shop_bench_01',
-    name: 'Bench Philippines',
-    code: 'BENCH',
-    ownerName: 'Juan Dela Cruz',
-    ownerEmail: 'owner@bench.com',
-    category: 'Casual & Streetwear',
-    vton_enabled: false,
-    joinedDate: 'Oct 10, 2026'
-  },
-  {
-    id: 'shop_zara_02',
-    name: 'Zara Manila',
-    code: 'ZARA',
-    ownerName: 'Maria Santos',
-    ownerEmail: 'owner@zara.com',
-    category: 'Luxury & Formalwear',
-    vton_enabled: true,
-    joinedDate: 'Oct 12, 2026'
-  },
-  {
-    id: 'shop_uniqlo_03',
-    name: 'Uniqlo Hub',
-    code: 'UNIQLO',
-    ownerName: 'Kenji Sato',
-    ownerEmail: 'owner@uniqlo.com',
-    category: 'Denim & Apparel',
-    vton_enabled: true,
-    joinedDate: 'Oct 14, 2026'
-  }
-];
+let savedShops = JSON.parse(localStorage.getItem('antigravity_platform_shops')) || [];
+// Purge legacy mock shops so they never display when deleted from Supabase
+savedShops = savedShops.filter(s => s && !['shop_bench_01', 'shop_zara_02', 'shop_uniqlo_03'].includes(s.id));
+let shops = savedShops;
 
 let currentUser = JSON.parse(localStorage.getItem('antigravity_current_user')) || {
   email: 'admin@antigravity.io',
@@ -229,13 +201,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Sync registered shops from Supabase
-async function syncSupabaseShops() {
+async function syncSupabaseShops(showFeedback = false) {
   if (window.db && window.db.fetchShops) {
     const liveShops = await window.db.fetchShops();
-    if (liveShops && liveShops.length > 0) {
+    if (Array.isArray(liveShops)) {
       shops = liveShops;
       localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
       renderSuperShops();
+      if (showFeedback) {
+        showToast(`Synced ${shops.length} store${shops.length === 1 ? '' : 's'} from Supabase.`, 'success');
+      }
     } else {
       renderSuperShops();
     }
@@ -570,6 +545,9 @@ function renderSuperShops() {
             <button class="btn btn-outline btn-sm" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On SDK">
               <i class="fa-solid fa-wand-magic-sparkles"></i> VTON
             </button>
+            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.35);" onclick="handleDeleteShop('${s.id}', '${s.name.replace(/'/g, "\\'")}')" title="Permanently Delete Shop">
+              <i class="fa-solid fa-trash"></i>
+            </button>
           </div>
         </td>
       ` : ''}
@@ -703,6 +681,26 @@ async function toggleShopActive(shopId) {
     showToast(`Store "${shop.name}" has been ${nextState ? 'Activated' : 'Deactivated'}.`, nextState ? 'success' : 'info');
     renderSuperShops();
   }
+}
+
+// Super Admin: Delete Shop
+async function handleDeleteShop(shopId, shopName) {
+  if (!confirm(`Are you sure you want to permanently delete "${shopName}" from Supabase? This action cannot be undone.`)) {
+    return;
+  }
+
+  if (window.db && window.db.deleteShop) {
+    const res = await window.db.deleteShop(shopId);
+    if (!res.success) {
+      showToast(`Failed to delete shop from Supabase: ${res.error}`, 'error');
+      return;
+    }
+  }
+
+  shops = shops.filter(s => s.id !== shopId);
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  showToast(`Shop "${shopName}" has been deleted.`, 'info');
+  renderSuperShops();
 }
 
 // Live Super Admin Provisioning Function (lowercase store code)

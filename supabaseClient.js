@@ -252,7 +252,24 @@ window.db = {
     }
   },
 
-  // 5. Fetch all registered shops from Supabase
+  // 5. Super Admin: Delete a shop from Supabase
+  async deleteShop(shopId) {
+    if (!supabaseClient) return { success: true };
+    try {
+      const { error } = await supabaseClient
+        .from('shops')
+        .delete()
+        .eq('id', shopId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err) {
+      console.error('Error deleting shop:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  // 6. Fetch all registered shops from Supabase
   async fetchShops() {
     if (!supabaseClient) return [];
 
