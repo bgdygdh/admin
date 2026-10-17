@@ -103,7 +103,7 @@
       <a class="nav-item" onclick="switchTab('categories')">
         <i class="fa-solid fa-layer-group"></i>
         <span>Categories</span>
-        <span class="nav-badge">5</span>
+        <span class="nav-badge" id="sidebarCategoryCount">0</span>
       </a>
 
       <a class="nav-item" onclick="switchTab('orders')">
@@ -489,15 +489,22 @@
         <div class="toolbar-header">
           <div>
             <h3 style="font-size: 1.15rem; font-weight: 700;">Garment Categories</h3>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">Manage apparel classification for size chart recommendation rules</p>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Organize your shop's catalog. Only your own categories are shown here.</p>
           </div>
-          <button class="btn btn-primary" onclick="openAddCategoryModal()">
-            <i class="fa-solid fa-plus"></i> Add Category
-          </button>
+          <div class="filter-group">
+            <div class="segmented" role="tablist" aria-label="Category status filter">
+              <button type="button" class="segmented-btn active" id="catFilterActive" onclick="setCategoryFilter('active')">Active <span class="segmented-count" id="catCountActive">0</span></button>
+              <button type="button" class="segmented-btn" id="catFilterArchived" onclick="setCategoryFilter('archived')">Archived <span class="segmented-count" id="catCountArchived">0</span></button>
+              <button type="button" class="segmented-btn" id="catFilterAll" onclick="setCategoryFilter('all')">All</button>
+            </div>
+            <button class="btn btn-primary" id="addCategoryBtn" onclick="openAddCategoryModal()">
+              <i class="fa-solid fa-plus"></i> Add Category
+            </button>
+          </div>
         </div>
 
         <div class="categories-grid" id="categoriesGridContainer">
-          <!-- Dynamically populated -->
+          <!-- Dynamically populated from public.categories -->
         </div>
       </section>
 
@@ -857,31 +864,48 @@
     </div>
   </div>
 
-  <!-- Add Category Modal -->
-  <div id="addCategoryModal" class="modal-overlay">
+  <!-- Category Modal (Add / Edit) -->
+  <div id="categoryModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-layer-group"></i> Add Garment Category</h3>
-        <button class="modal-close" onclick="closeModal('addCategoryModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h3 id="categoryModalTitle"><i class="fa-solid fa-layer-group"></i> Add Garment Category</h3>
+        <button type="button" class="modal-close" onclick="closeCategoryModal()"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <form onsubmit="handleSaveCategory(event)">
+      <form id="categoryForm" onsubmit="handleSaveCategory(event)">
         <div class="modal-body">
+          <input type="hidden" id="catEditId">
+
           <div class="form-group">
-            <label>Category Name</label>
-            <input type="text" id="catName" class="form-input" placeholder="e.g. Activewear & Gym" required>
+            <label for="catName">Category Name</label>
+            <input type="text" id="catName" class="form-input" placeholder="e.g. Polo Shirts" maxlength="60" required>
           </div>
+
           <div class="form-group">
-            <label>Category Icon (FontAwesome class)</label>
-            <input type="text" id="catIcon" class="form-input" placeholder="fa-person-running" value="fa-person-running" required>
+            <label for="catDesc">Description</label>
+            <textarea id="catDesc" class="form-input" rows="3" maxlength="240" placeholder="Short description shoppers will see, e.g. Classic and sport polos for everyday wear"></textarea>
+            <span class="field-hint"><span id="catDescCount">0</span>/240</span>
           </div>
+
           <div class="form-group">
-            <label>Description</label>
-            <input type="text" id="catDesc" class="form-input" placeholder="Sports performance and flexible garments" required>
+            <label>Category Image</label>
+            <input type="file" id="catImageInput" accept="image/png,image/jpeg,image/webp" hidden onchange="handleCategoryImageChosen(event)">
+            <div class="upload-dropzone" id="catDropzone" onclick="document.getElementById('catImageInput').click()" ondragover="event.preventDefault(); this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleCategoryImageDrop(event)">
+              <div class="upload-empty" id="catUploadEmpty">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <strong>Click to upload or drag &amp; drop</strong>
+                <span>PNG, JPG or WebP &middot; max 2 MB</span>
+              </div>
+              <img id="catImagePreview" class="upload-preview" alt="Category image preview" hidden>
+            </div>
+            <div class="upload-actions" id="catUploadActions" hidden>
+              <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('catImageInput').click()"><i class="fa-solid fa-arrows-rotate"></i> Replace</button>
+              <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.35);" onclick="removeCategoryImage()"><i class="fa-solid fa-trash"></i> Remove</button>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('addCategoryModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Add Category</button>
+          <button type="button" class="btn btn-secondary" onclick="closeCategoryModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="categorySubmitBtn"><i class="fa-solid fa-check"></i> Add Category</button>
         </div>
       </form>
     </div>

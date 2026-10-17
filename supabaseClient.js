@@ -347,6 +347,162 @@ window.db = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // 8. Categories (per shop) - every call is explicitly scoped by shop_id.
+  //    Row Level Security enforces the same rule server-side.
+  // ---------------------------------------------------------------------------
+  CATEGORY_BUCKET: 'category-images',
+  CATEGORY_IMAGE_MAX_BYTES: 2 * 1024 * 1024,
+  CATEGORY_IMAGE_TYPES: ['image/png', 'image/jpeg', 'image/webp'],
+
+  _categoryError(err) {
+    if (err && err.code === '23505') {
+      return 'A category with this name already exists in your shop.';
+    }
+    return (err && err.message) || 'Unexpected database error.';
+  },
+
+  async fetchCategories(shopId) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .select('id, shop_id, name, description, image_url, is_active, created_at, products(count)')
+        .eq('shop_id', shopId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const categories = (data || []).map(c => ({
+        id: c.id,
+        shop_id: c.shop_id,
+        name: c.name,
+        description: c.description || '',
+        image_url: c.image_url || null,
+        is_active: c.is_active !== false,
+        created_at: c.created_at,
+        productCount: Array.isArray(c.products) && c.products[0] ? (c.products[0].count || 0) : 0
+      }));
+      return { success: true, categories };
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      return { success: false, error: this._categoryError(err) };
+    }
+  },
+
+  validateCategoryImage(file) {
+    if (!file) return null;
+    if (!this.CATEGORY_IMAGE_TYPES.includes(file.type)) {
+      return 'Image must be a PNG, JPG or WebP file.';
+    }
+    if (file.size > this.CATEGORY_IMAGE_MAX_BYTES) {
+      return 'Image must be 2 MB or smaller.';
+    }
+    return null;
+  },
+
+  // Uploads to category-images/{shop_id}/{uuid}.{ext} and returns the public URL
+  async uploadCategoryImage(shopId, file) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    const invalid = this.validateCategoryImage(file);
+    if (invalid) return { success: false, error: invalid };
+
+    try {
+      const extMap = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+      const uid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const path = `${shopId}/${uid}.${extMap[file.type]}`;
+
+      const { error: upErr } = await supabaseClient.storage
+        .from(this.CATEGORY_BUCKET)
+        .upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+      if (upErr) throw upErr;
+
+      const { data } = supabaseClient.storage.from(this.CATEGORY_BUCKET).getPublicUrl(path);
+      return { success: true, url: data.publicUrl, path };
+    } catch (err) {
+      console.error('Error uploading category image:', err);
+      return { success: false, error: `Image upload failed: ${err.message}` };
+    }
+  },
+
+  // Best-effort cleanup of a replaced/removed image (only inside the shop's own folder)
+  async deleteCategoryImageByUrl(shopId, url) {
+    if (!supabaseClient || !url) return;
+    try {
+      const marker = `/${this.CATEGORY_BUCKET}/`;
+      const idx = url.indexOf(marker);
+      if (idx === -1) return;
+      const path = decodeURIComponent(url.substring(idx + marker.length).split('?')[0]);
+      if (!path.startsWith(`${shopId}/`)) return;
+      await supabaseClient.storage.from(this.CATEGORY_BUCKET).remove([path]);
+    } catch (err) {
+      console.warn('Could not remove old category image:', err.message);
+    }
+  },
+
+  async createCategory(shopId, { name, description, image_url }) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .insert({
+          shop_id: shopId,
+          name: name.trim(),
+          description: description ? description.trim() : null,
+          image_url: image_url || null,
+          is_active: true
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error creating category:', err);
+      return { success: false, error: this._categoryError(err) };
+    }
+  },
+
+  async updateCategory(shopId, categoryId, { name, description, image_url }) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .update({
+          name: name.trim(),
+          description: description ? description.trim() : null,
+          image_url: image_url || null
+        })
+        .eq('id', categoryId)
+        .eq('shop_id', shopId)
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error updating category:', err);
+      return { success: false, error: this._categoryError(err) };
+    }
+  },
+
+  // Archive (isActive = false) or restore (isActive = true)
+  async setCategoryActive(shopId, categoryId, isActive) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .update({ is_active: isActive })
+        .eq('id', categoryId)
+        .eq('shop_id', shopId)
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error changing category status:', err);
+      return { success: false, error: this._categoryError(err) };
+    }
+  },
+
   async logout() {
     if (supabaseClient) {
       await supabaseClient.auth.signOut();

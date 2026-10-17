@@ -107,14 +107,13 @@ let products = JSON.parse(localStorage.getItem('antigravity_admin_products')) ||
   }
 ];
 
-// Dummy Categories
-let categories = JSON.parse(localStorage.getItem('antigravity_admin_categories')) || [
-  { id: 'cat-1', name: 'Tops & Shirts', icon: 'fa-shirt', count: 14, desc: 'T-shirts, polos, casual & formal shirts' },
-  { id: 'cat-2', name: 'Bottoms & Pants', icon: 'fa-socks', count: 8, desc: 'Denim jeans, chinos, cargo & trousers' },
-  { id: 'cat-3', name: 'One-Pieces & Dresses', icon: 'fa-vest', count: 6, desc: 'Dresses, rompers, jumpsuits and sets' },
-  { id: 'cat-4', name: 'Outerwear & Jackets', icon: 'fa-mitten', count: 5, desc: 'Hoodies, windbreakers, coats and blazers' },
-  { id: 'cat-5', name: 'Activewear & Gym', icon: 'fa-person-running', count: 7, desc: 'Performance wear, athletic tights & tops' }
-];
+// Categories (live from Supabase public.categories, scoped to the owner's shop)
+let categories = [];
+let categoriesShopId = null;      // which shop the in-memory list belongs to
+let categoriesLoaded = false;
+let categoriesLoading = false;
+let categoriesError = null;
+let categoryFilter = 'active';    // 'active' | 'archived' | 'all'
 
 // Dummy Orders
 let orders = JSON.parse(localStorage.getItem('antigravity_admin_orders')) || [
@@ -202,6 +201,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Sync registered shops from Supabase
 async function syncSupabaseShops(showFeedback = false) {
+  // Only the Super Admin works with the platform-wide shop list.
+  // Store owners must never load other merchants' shops.
+  if (currentUser.role !== 'admin') return;
+
   if (window.db && window.db.fetchShops) {
     const liveShops = await window.db.fetchShops();
     if (Array.isArray(liveShops)) {
@@ -361,6 +364,7 @@ async function handleLogout() {
   }
   isLoggedIn = false;
   localStorage.removeItem('antigravity_admin_auth');
+  resetCategoriesState();
   document.getElementById('authWrapper').classList.remove('hidden');
   showToast('Logged out of session.', 'info');
 }
@@ -429,6 +433,9 @@ function applyRoleNavigation() {
     if (codeInput) codeInput.value = shop.code;
     if (emailInput) emailInput.value = shop.ownerEmail;
 
+    // Load this shop's categories (sidebar badge + Categories tab)
+    loadCategories();
+
     switchTab('dashboard');
   }
 }
@@ -462,6 +469,11 @@ function switchTab(tabName) {
   // Automatically refresh live data from Supabase for Super Admin views
   if (tabName === 'super-dashboard' || tabName === 'super-shops') {
     syncSupabaseShops();
+  }
+
+  // Refresh this shop's categories whenever the tab is opened
+  if (tabName === 'categories') {
+    loadCategories(true);
   }
 }
 
@@ -1120,48 +1132,410 @@ function deleteProduct(prodId) {
 // 8. Categories & Orders
 // =============================================================================
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// The shop the signed-in owner belongs to. Every category query is scoped to this id.
+function getOwnerShopId() {
+  if (currentUser.role !== 'owner') return null;
+  return UUID_RE.test(currentUser.shopId || '') ? currentUser.shopId : null;
+}
+
+function resetCategoriesState() {
+  categories = [];
+  categoriesShopId = null;
+  categoriesLoaded = false;
+  categoriesLoading = false;
+  categoriesError = null;
+  categoryFilter = 'active';
+  syncCategoryFilterButtons();
+  renderCategories();
+}
+
+async function loadCategories(force = false) {
+  const shopId = getOwnerShopId();
+
+  if (!shopId) {
+    categories = [];
+    categoriesShopId = null;
+    categoriesLoaded = true;
+    renderCategories();
+    return;
+  }
+
+  // Never show another shop's data if the account changed
+  if (categoriesShopId !== shopId) {
+    categories = [];
+    categoriesLoaded = false;
+    categoriesError = null;
+    categoriesShopId = shopId;
+  }
+
+  if (categoriesLoading) return;
+  if (categoriesLoaded && !force) {
+    renderCategories();
+    return;
+  }
+
+  categoriesLoading = true;
+  categoriesError = null;
+  renderCategories();
+
+  const res = await window.db.fetchCategories(shopId);
+  categoriesLoading = false;
+
+  // Session/shop changed while the request was in flight - discard the result
+  if (getOwnerShopId() !== shopId) return;
+
+  if (res.success) {
+    categories = res.categories;
+    categoriesLoaded = true;
+  } else {
+    categoriesError = res.error;
+  }
+  renderCategories();
+}
+
+function updateCategoryCounts() {
+  const activeCount = categories.filter(c => c.is_active).length;
+  const archivedCount = categories.length - activeCount;
+
+  const sidebar = document.getElementById('sidebarCategoryCount');
+  const activeEl = document.getElementById('catCountActive');
+  const archivedEl = document.getElementById('catCountArchived');
+  if (sidebar) sidebar.textContent = activeCount;
+  if (activeEl) activeEl.textContent = activeCount;
+  if (archivedEl) archivedEl.textContent = archivedCount;
+}
+
+function syncCategoryFilterButtons() {
+  [['active', 'catFilterActive'], ['archived', 'catFilterArchived'], ['all', 'catFilterAll']].forEach(([key, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', categoryFilter === key);
+  });
+}
+
+function setCategoryFilter(filter) {
+  categoryFilter = filter;
+  syncCategoryFilterButtons();
+  renderCategories();
+}
+
+function categoryImageFallback(img) {
+  img.outerHTML = '<i class="fa-solid fa-image category-cover-placeholder"></i>';
+}
+
 function renderCategories() {
   const container = document.getElementById('categoriesGridContainer');
   if (!container) return;
 
-  container.innerHTML = categories.map(cat => `
-    <div class="category-card">
-      <div class="category-icon-box">
-        <i class="fa-solid ${cat.icon}"></i>
+  updateCategoryCounts();
+
+  const shopId = getOwnerShopId();
+  const addBtn = document.getElementById('addCategoryBtn');
+  if (addBtn) addBtn.disabled = !shopId;
+
+  if (!shopId) {
+    container.innerHTML = `
+      <div class="grid-state">
+        <i class="fa-solid fa-store-slash"></i>
+        <strong>No shop is linked to this account</strong>
+        Ask the Super Admin to provision your store before managing categories.
+      </div>`;
+    return;
+  }
+
+  if (categoriesError && !categoriesLoaded) {
+    container.innerHTML = `
+      <div class="grid-state">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>Couldn't load your categories</strong>
+        ${escapeHtml(categoriesError)}
+        <div><button class="btn btn-outline" onclick="loadCategories(true)"><i class="fa-solid fa-arrows-rotate"></i> Try again</button></div>
+      </div>`;
+    return;
+  }
+
+  if (!categoriesLoaded) {
+    container.innerHTML = '<div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>';
+    return;
+  }
+
+  const visible = categories.filter(c =>
+    categoryFilter === 'all' ? true : (categoryFilter === 'active' ? c.is_active : !c.is_active)
+  );
+
+  if (visible.length === 0) {
+    if (categories.length === 0) {
+      container.innerHTML = `
+        <div class="grid-state">
+          <i class="fa-solid fa-layer-group"></i>
+          <strong>No categories yet</strong>
+          Create your first category to start organizing your garments.
+          <div><button class="btn btn-primary" onclick="openAddCategoryModal()"><i class="fa-solid fa-plus"></i> Add Category</button></div>
+        </div>`;
+    } else {
+      container.innerHTML = `
+        <div class="grid-state">
+          <i class="fa-solid ${categoryFilter === 'archived' ? 'fa-box-archive' : 'fa-layer-group'}"></i>
+          <strong>${categoryFilter === 'archived' ? 'No archived categories' : 'No active categories'}</strong>
+          ${categoryFilter === 'archived' ? 'Categories you archive will appear here.' : 'Restore an archived category or add a new one.'}
+        </div>`;
+    }
+    return;
+  }
+
+  container.innerHTML = visible.map(cat => {
+    const archived = !cat.is_active;
+    const count = cat.productCount || 0;
+    return `
+    <article class="category-card ${archived ? 'is-archived' : ''}">
+      <div class="category-cover">
+        ${cat.image_url
+          ? `<img src="${escapeHtml(cat.image_url)}" alt="${escapeHtml(cat.name)}" loading="lazy" onerror="categoryImageFallback(this)">`
+          : '<i class="fa-solid fa-image category-cover-placeholder"></i>'}
+        <span class="badge category-status ${archived ? 'badge-amber' : 'badge-emerald'}">
+          <i class="fa-solid ${archived ? 'fa-box-archive' : 'fa-circle-check'}"></i> ${archived ? 'Archived' : 'Active'}
+        </span>
       </div>
-      <div class="category-details">
-        <h4>${cat.name}</h4>
-        <p>${cat.desc}</p>
-        <span class="badge badge-indigo" style="margin-top: 10px;">${cat.count} Garment Models</span>
+      <div class="category-body">
+        <h4>${escapeHtml(cat.name)}</h4>
+        <p class="${cat.description ? '' : 'is-empty'}">${cat.description ? escapeHtml(cat.description) : 'No description'}</p>
       </div>
-    </div>
-  `).join('');
+      <div class="category-footer">
+        <span class="badge badge-indigo badge-nowrap"><i class="fa-solid fa-shirt"></i> ${count} ${count === 1 ? 'Product' : 'Products'}</span>
+        <div class="row-actions">
+          <button class="icon-btn" onclick="openEditCategoryModal('${cat.id}')" title="Edit category" aria-label="Edit category">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button class="icon-btn ${archived ? 'icon-btn-success' : 'icon-btn-warn'}" onclick="toggleCategoryArchive('${cat.id}')" title="${archived ? 'Restore category' : 'Archive category'}" aria-label="${archived ? 'Restore category' : 'Archive category'}">
+            <i class="fa-solid ${archived ? 'fa-box-open' : 'fa-box-archive'}"></i>
+          </button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+// ---- Category modal (add / edit) with image upload ---------------------------
+
+const categoryImageState = { file: null, existingUrl: null, removed: false, objectUrl: null };
+
+function setCategoryPreview(src) {
+  const preview = document.getElementById('catImagePreview');
+  const empty = document.getElementById('catUploadEmpty');
+  const actions = document.getElementById('catUploadActions');
+  if (src) {
+    preview.src = src;
+    preview.hidden = false;
+    empty.hidden = true;
+    actions.hidden = false;
+  } else {
+    preview.removeAttribute('src');
+    preview.hidden = true;
+    empty.hidden = false;
+    actions.hidden = true;
+  }
+}
+
+function resetCategoryImageState(existingUrl = null) {
+  if (categoryImageState.objectUrl) URL.revokeObjectURL(categoryImageState.objectUrl);
+  categoryImageState.file = null;
+  categoryImageState.existingUrl = existingUrl;
+  categoryImageState.removed = false;
+  categoryImageState.objectUrl = null;
+  const input = document.getElementById('catImageInput');
+  if (input) input.value = '';
+  setCategoryPreview(existingUrl);
+}
+
+function updateCategoryDescCount() {
+  const area = document.getElementById('catDesc');
+  const counter = document.getElementById('catDescCount');
+  if (area && counter) counter.textContent = area.value.length;
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'catDesc') updateCategoryDescCount();
+});
+
+function setCategorySubmitting(isSubmitting, label) {
+  const btn = document.getElementById('categorySubmitBtn');
+  if (!btn) return;
+  btn.disabled = isSubmitting;
+  btn.innerHTML = isSubmitting
+    ? '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'
+    : label;
 }
 
 function openAddCategoryModal() {
+  if (!getOwnerShopId()) {
+    showToast('No shop is linked to this account.', 'error');
+    return;
+  }
+  document.getElementById('categoryModalTitle').innerHTML = '<i class="fa-solid fa-layer-group"></i> Add Garment Category';
+  document.getElementById('catEditId').value = '';
   document.getElementById('catName').value = '';
   document.getElementById('catDesc').value = '';
-  openModal('addCategoryModal');
+  updateCategoryDescCount();
+  resetCategoryImageState(null);
+  setCategorySubmitting(false, '<i class="fa-solid fa-check"></i> Add Category');
+  openModal('categoryModal');
+  document.getElementById('catName').focus();
 }
 
-function handleSaveCategory(e) {
+function openEditCategoryModal(categoryId) {
+  const cat = categories.find(c => c.id === categoryId);
+  if (!cat) return;
+
+  document.getElementById('categoryModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Category';
+  document.getElementById('catEditId').value = cat.id;
+  document.getElementById('catName').value = cat.name;
+  document.getElementById('catDesc').value = cat.description || '';
+  updateCategoryDescCount();
+  resetCategoryImageState(cat.image_url);
+  setCategorySubmitting(false, '<i class="fa-solid fa-floppy-disk"></i> Save Changes');
+  openModal('categoryModal');
+}
+
+function closeCategoryModal() {
+  resetCategoryImageState(null);
+  closeModal('categoryModal');
+}
+
+function acceptCategoryImageFile(file) {
+  if (!file) return;
+  const problem = window.db.validateCategoryImage(file);
+  if (problem) {
+    showToast(problem, 'error');
+    return;
+  }
+  if (categoryImageState.objectUrl) URL.revokeObjectURL(categoryImageState.objectUrl);
+  categoryImageState.file = file;
+  categoryImageState.removed = false;
+  categoryImageState.objectUrl = URL.createObjectURL(file);
+  setCategoryPreview(categoryImageState.objectUrl);
+}
+
+function handleCategoryImageChosen(e) {
+  acceptCategoryImageFile(e.target.files && e.target.files[0]);
+  e.target.value = ''; // allow re-selecting the same file
+}
+
+function handleCategoryImageDrop(e) {
   e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  acceptCategoryImageFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+}
+
+function removeCategoryImage() {
+  if (categoryImageState.objectUrl) URL.revokeObjectURL(categoryImageState.objectUrl);
+  categoryImageState.file = null;
+  categoryImageState.objectUrl = null;
+  categoryImageState.removed = !!categoryImageState.existingUrl;
+  setCategoryPreview(null);
+}
+
+async function handleSaveCategory(e) {
+  e.preventDefault();
+
+  const shopId = getOwnerShopId();
+  if (!shopId) {
+    showToast('No shop is linked to this account.', 'error');
+    return;
+  }
+
+  const editId = document.getElementById('catEditId').value;
   const name = document.getElementById('catName').value.trim();
-  const icon = document.getElementById('catIcon').value.trim();
-  const desc = document.getElementById('catDesc').value.trim();
+  const description = document.getElementById('catDesc').value.trim();
+  const submitLabel = editId
+    ? '<i class="fa-solid fa-floppy-disk"></i> Save Changes'
+    : '<i class="fa-solid fa-check"></i> Add Category';
 
-  categories.push({
-    id: `cat-${Date.now()}`,
-    name,
-    icon: icon.startsWith('fa-') ? icon : `fa-${icon}`,
-    count: 0,
-    desc
-  });
+  if (!name) {
+    showToast('Category name is required.', 'error');
+    return;
+  }
 
-  localStorage.setItem('antigravity_admin_categories', JSON.stringify(categories));
-  closeModal('addCategoryModal');
-  showToast(`Category "${name}" added!`, 'success');
-  renderCategories();
+  const duplicate = categories.find(c => c.id !== editId && c.name.trim().toLowerCase() === name.toLowerCase());
+  if (duplicate) {
+    showToast(`A category named "${escapeHtml(duplicate.name)}" already exists${duplicate.is_active ? '' : ' (archived)'}.`, 'error');
+    return;
+  }
+
+  setCategorySubmitting(true);
+
+  const existing = editId ? categories.find(c => c.id === editId) : null;
+  let imageUrl = existing ? existing.image_url : null;
+  let uploadedUrl = null;
+
+  if (categoryImageState.file) {
+    const up = await window.db.uploadCategoryImage(shopId, categoryImageState.file);
+    if (!up.success) {
+      setCategorySubmitting(false, submitLabel);
+      showToast(escapeHtml(up.error), 'error');
+      return;
+    }
+    uploadedUrl = up.url;
+    imageUrl = up.url;
+  } else if (categoryImageState.removed) {
+    imageUrl = null;
+  }
+
+  const payload = { name, description, image_url: imageUrl };
+  const res = editId
+    ? await window.db.updateCategory(shopId, editId, payload)
+    : await window.db.createCategory(shopId, payload);
+
+  if (!res.success) {
+    // Don't leave an orphaned upload behind when the save failed
+    if (uploadedUrl) await window.db.deleteCategoryImageByUrl(shopId, uploadedUrl);
+    setCategorySubmitting(false, submitLabel);
+    showToast(escapeHtml(res.error), 'error');
+    return;
+  }
+
+  // Remove the previous image once it has been replaced or removed
+  if (existing && existing.image_url && existing.image_url !== imageUrl) {
+    await window.db.deleteCategoryImageByUrl(shopId, existing.image_url);
+  }
+
+  closeCategoryModal();
+  showToast(`Category "${escapeHtml(name)}" ${editId ? 'updated' : 'added'}!`, 'success');
+  await loadCategories(true);
+}
+
+async function toggleCategoryArchive(categoryId) {
+  const shopId = getOwnerShopId();
+  const cat = categories.find(c => c.id === categoryId);
+  if (!shopId || !cat) return;
+
+  const makeActive = !cat.is_active;
+
+  if (!makeActive) {
+    const n = cat.productCount || 0;
+    const note = n > 0
+      ? ` Its ${n} product${n === 1 ? '' : 's'} will stay in your catalog, but the category will be hidden from shoppers.`
+      : ' It will be hidden from shoppers.';
+    if (!confirm(`Archive "${cat.name}"?${note} You can restore it at any time.`)) return;
+  }
+
+  const res = await window.db.setCategoryActive(shopId, categoryId, makeActive);
+  if (!res.success) {
+    showToast(escapeHtml(res.error), 'error');
+    return;
+  }
+
+  showToast(`Category "${escapeHtml(cat.name)}" ${makeActive ? 'restored' : 'archived'}.`, makeActive ? 'success' : 'info');
+  await loadCategories(true);
 }
 
 function renderOrders() {
