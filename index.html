@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Portal | Virtual Try-On & Body Measurement E-Commerce</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Standalone Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. Auth Screen Overlay (Shop Registration & Login)
+       ========================================================================= -->
+  <div id="authWrapper" class="auth-wrapper">
+    <div class="auth-box">
+      <div class="auth-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-vest-patches"></i>
+        </div>
+        <div class="brand-title">
+          <h1>Antigravity Admin</h1>
+          <span>Merchant Backstage</span>
+        </div>
+      </div>
+
+      <!-- Auth Mode Tabs -->
+      <div class="auth-tabs">
+        <button id="tabBtnLogin" class="auth-tab-btn active" onclick="switchAuthTab('login')">
+          <i class="fa-solid fa-right-to-bracket"></i> Login
+        </button>
+        <button id="tabBtnRegister" class="auth-tab-btn" onclick="switchAuthTab('register')">
+          <i class="fa-solid fa-store"></i> Register Shop
+        </button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label><i class="fa-solid fa-envelope"></i> Store ID or Email</label>
+          <input type="text" id="loginId" class="form-input" placeholder="admin@bench.com or BENCH01" required value="admin@bench.com">
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-lock"></i> Password</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required value="admin123456">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Access Merchant Dashboard
+        </button>
+      </form>
+
+      <!-- Register Shop Form -->
+      <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label><i class="fa-solid fa-shop"></i> Store / Brand Name</label>
+          <input type="text" id="regShopName" class="form-input" placeholder="e.g. Bench Philippines" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-hashtag"></i> Unique Store Code</label>
+          <input type="text" id="regShopCode" class="form-input" placeholder="e.g. BENCH" style="text-transform: uppercase;" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-envelope"></i> Merchant Email</label>
+          <input type="email" id="regEmail" class="form-input" placeholder="owner@bench.com" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-lock"></i> Set Password</label>
+          <input type="password" id="regPassword" class="form-input" placeholder="Create strong password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
+          <i class="fa-solid fa-circle-check"></i> Register Store & Connect
+        </button>
+      </form>
+
+      <!-- Quick 1-Click Demo Login -->
+      <button type="button" class="auth-demo-btn" onclick="demoLogin()">
+        <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 1-Click Instant Demo Access (Bench Store)
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       2. Sidebar Navigation
+       ========================================================================= -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-icon">
+        <i class="fa-solid fa-vest-patches"></i>
+      </div>
+      <div class="brand-title">
+        <h1 id="sidebarShopTitle">Bench Store</h1>
+        <span>Merchant Portal</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <a class="nav-item active" onclick="switchTab('dashboard')">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <div class="nav-section-label">Catalog & Sales</div>
+      <a class="nav-item" onclick="switchTab('products')">
+        <i class="fa-solid fa-shirt"></i>
+        <span>Products</span>
+        <span class="nav-badge" id="sidebarProductCount">12</span>
+      </a>
+
+      <a class="nav-item" onclick="switchTab('categories')">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Categories</span>
+        <span class="nav-badge">5</span>
+      </a>
+
+      <a class="nav-item" onclick="switchTab('orders')">
+        <i class="fa-solid fa-bag-shopping"></i>
+        <span>Orders</span>
+        <span class="nav-badge" id="sidebarOrderCount">8</span>
+      </a>
+
+      <div class="nav-section-label">System</div>
+      <a class="nav-item" onclick="switchTab('settings')">
+        <i class="fa-solid fa-gear"></i>
+        <span>Settings</span>
+        <span class="nav-badge plugin-live" id="sidebarPluginBadge">VTON Ready</span>
+      </a>
+    </nav>
+
+    <!-- Sidebar Footer / Store Owner Switcher -->
+    <div class="sidebar-footer">
+      <div class="user-shop-card">
+        <div class="shop-avatar" id="avatarLetter">B</div>
+        <div class="shop-info">
+          <div class="name" id="userDisplayName">Bench Admin</div>
+          <div class="role" id="userStoreCode">CODE: BENCH</div>
+        </div>
+        <button class="logout-btn" title="Logout" onclick="handleLogout()">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- =========================================================================
+       3. Main Content Area
+       ========================================================================= -->
+  <div class="main-wrapper">
+    <!-- Top Bar -->
+    <header class="top-header">
+      <div class="header-left">
+        <h2 class="page-title" id="pageTitle">Dashboard Overview</h2>
+      </div>
+      <div class="header-right">
+        <div class="cloud-badge" title="Live PostgreSQL Backend">
+          <span class="pulse-dot"></span>
+          <span>Supabase Cloud Connected</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="switchTab('settings')">
+          <i class="fa-solid fa-sliders"></i> Store Settings
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Body -->
+    <main class="content-body">
+
+      <!-- =====================================================================
+           TAB 1: DASHBOARD
+           ===================================================================== -->
+      <section id="tab-dashboard" class="tab-view active">
+        <!-- Metric Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Total Revenue</span>
+              <div class="stat-icon emerald"><i class="fa-solid fa-dollar-sign"></i></div>
+            </div>
+            <div class="stat-value" id="statRevenue">$148,920.00</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +16.4%</span>
+              <span>vs last month</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Total Orders</span>
+              <div class="stat-icon indigo"><i class="fa-solid fa-cart-shopping"></i></div>
+            </div>
+            <div class="stat-value" id="statOrders">1,482</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +12.1%</span>
+              <span>completed</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Active Products</span>
+              <div class="stat-icon cyan"><i class="fa-solid fa-tags"></i></div>
+            </div>
+            <div class="stat-value" id="statProducts">12</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-check"></i> 100% in stock</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">VTON Try-On Sessions</span>
+              <div class="stat-icon amber"><i class="fa-solid fa-camera-retro"></i></div>
+            </div>
+            <div class="stat-value" id="statTryOns">3,890</div>
+            <div class="stat-trend">
+              <span class="trend-up"><i class="fa-solid fa-bullseye"></i> 94.2% size accuracy</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Featured Plugin Callout Banner -->
+        <div class="plugin-feature-banner">
+          <div class="banner-content">
+            <div class="banner-badge-icon">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div class="banner-text">
+              <h4>Virtual Try-On & Body Sizing Engine</h4>
+              <p>Plugin state: <span id="bannerPluginStatus" style="font-weight: 700; color: #10b981;">Ready to Activate</span> — Powered by ML Kit Pose Estimation & Fashn AI.</p>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('settings')">
+            <i class="fa-solid fa-download"></i> Manage Plugin In Settings
+          </button>
+        </div>
+
+        <!-- Charts and Activity Grid -->
+        <div class="dashboard-grid">
+          <!-- Sales & VTON Analytics Chart -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3><i class="fa-solid fa-chart-area" style="color: var(--primary);"></i> Revenue & Try-On Analytics</h3>
+                <span class="card-subtitle">Monthly sales volume and customer try-on conversion</span>
+              </div>
+            </div>
+            <div class="chart-container">
+              <svg class="chart-svg" viewBox="0 0 600 240" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.5"/>
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0"/>
+                  </linearGradient>
+                  <linearGradient id="tryonGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.4"/>
+                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Grid Lines -->
+                <line x1="0" y1="50" x2="600" y2="50" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+                <line x1="0" y1="110" x2="600" y2="110" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+                <line x1="0" y1="170" x2="600" y2="170" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+                
+                <!-- TryOn Area Area -->
+                <path d="M 0 190 Q 100 160, 200 140 T 400 90 T 600 40 L 600 240 L 0 240 Z" fill="url(#tryonGrad)"/>
+                <path d="M 0 190 Q 100 160, 200 140 T 400 90 T 600 40" fill="none" stroke="#06b6d4" stroke-width="3"/>
+
+                <!-- Revenue Area -->
+                <path d="M 0 170 Q 100 130, 200 110 T 400 60 T 600 20 L 600 240 L 0 240 Z" fill="url(#chartGrad)"/>
+                <path d="M 0 170 Q 100 130, 200 110 T 400 60 T 600 20" fill="none" stroke="#6366f1" stroke-width="3"/>
+
+                <!-- Data Dots -->
+                <circle cx="100" cy="145" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+                <circle cx="200" cy="110" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+                <circle cx="300" cy="85" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+                <circle cx="400" cy="60" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+                <circle cx="500" cy="40" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+                <circle cx="600" cy="20" r="4" fill="#6366f1" stroke="#fff" stroke-width="2"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Live Try-On Feed -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3><i class="fa-solid fa-person-rays" style="color: var(--accent-cyan);"></i> Live Try-On Feed</h3>
+                <span class="card-subtitle">Customer AI sizing activity</span>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 14px;" id="liveFeedContainer">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Orders Summary -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3><i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-amber);"></i> Recent Customer Orders</h3>
+              <span class="card-subtitle">Orders with automated size recommendations</span>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('orders')">View All Orders</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Garment Item</th>
+                  <th>Recommended Size</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recentOrdersTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           TAB 2: PRODUCTS
+           ===================================================================== -->
+      <section id="tab-products" class="tab-view">
+        <div class="toolbar-header">
+          <div class="toolbar-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="productSearchInput" placeholder="Search garment products..." oninput="filterProducts()">
+          </div>
+          <div class="filter-group">
+            <select id="categoryFilter" class="custom-select" onchange="filterProducts()">
+              <option value="all">All Categories</option>
+              <option value="tops">Tops & Shirts</option>
+              <option value="bottoms">Bottoms & Pants</option>
+              <option value="one-pieces">One-Pieces & Dresses</option>
+              <option value="outerwear">Outerwear & Jackets</option>
+            </select>
+            <select id="genderFilter" class="custom-select" onchange="filterProducts()">
+              <option value="all">All Genders</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="unisex">Unisex</option>
+            </select>
+            <button class="btn btn-primary" onclick="openAddProductModal()">
+              <i class="fa-solid fa-plus"></i> Add Product
+            </button>
+          </div>
+        </div>
+
+        <!-- Products Grid -->
+        <div class="products-grid" id="productsGridContainer">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           TAB 3: CATEGORIES
+           ===================================================================== -->
+      <section id="tab-categories" class="tab-view">
+        <div class="toolbar-header">
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700;">Garment Categories</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Manage apparel classification for size chart recommendation rules</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddCategoryModal()">
+            <i class="fa-solid fa-plus"></i> Add Category
+          </button>
+        </div>
+
+        <div class="categories-grid" id="categoriesGridContainer">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           TAB 4: ORDERS
+           ===================================================================== -->
+      <section id="tab-orders" class="tab-view">
+        <div class="toolbar-header">
+          <div class="toolbar-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="orderSearchInput" placeholder="Search order ID or customer..." oninput="filterOrders()">
+          </div>
+          <div class="filter-group">
+            <select id="orderStatusFilter" class="custom-select" onchange="filterOrders()">
+              <option value="all">All Statuses</option>
+              <option value="Processing">Processing</option>
+              <option value="Shipped">Shipped</option>
+              <option value="Delivered">Delivered</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th>Garment Item & Size</th>
+                  <th>Total</th>
+                  <th>Payment</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="allOrdersTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           TAB 5: SETTINGS (Includes The Interactive Download Animation Toggle!)
+           ===================================================================== -->
+      <section id="tab-settings" class="tab-view">
+        <div class="settings-section">
+
+          <!-- 1. STAR FEATURE: Virtual Try-On & Body Measurement Plugin Activation Card -->
+          <div class="plugin-integration-box">
+            <div class="plugin-box-header">
+              <div class="plugin-meta">
+                <div class="plugin-hero-icon">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+                <div class="plugin-title">
+                  <h3>
+                    <span>Body Measurement & Virtual Try-On SDK</span>
+                    <span class="badge badge-indigo">v1.2.0 Production</span>
+                  </h3>
+                  <p>
+                    Connect our high-precision AI body measurement algorithm and Fashn AI try-on engine directly into your mobile storefront. When activated, the <strong>"Find My Size & Try-On"</strong> button is immediately enabled for shoppers in your mobile app.
+                  </p>
+                </div>
+              </div>
+
+              <!-- THE INTERACTIVE DOWNLOAD ANIMATION TOGGLE WIDGET -->
+              <div class="download-toggle-container" id="downloadToggleContainer">
+                <div class="download-status-bar">
+                  <span class="download-label" id="downloadStateLabel">
+                    <i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Plugin Package
+                  </span>
+                  <span class="download-percentage" id="downloadPercentText">Ready to Install</span>
+                </div>
+
+                <!-- Progress Bar Track -->
+                <div class="download-progress-track" id="downloadProgressTrack">
+                  <div class="download-progress-fill" id="downloadProgressFill"></div>
+                </div>
+
+                <!-- Initial Download / Activate Button -->
+                <button id="btnStartDownload" class="btn-download-action" onclick="triggerPluginDownloadAnimation()">
+                  <i class="fa-solid fa-download download-arrow-icon"></i>
+                  <span id="btnDownloadText">Install & Activate Plugin</span>
+                </button>
+
+                <!-- Installed Active State View (Shown after download completes) -->
+                <div class="installed-switch-view" id="installedSwitchView">
+                  <div class="installed-status-info">
+                    <span class="installed-badge-dot"></span>
+                    <div>
+                      <div style="font-weight: 700; font-size: 0.88rem; color: #10b981;">PLUGIN ACTIVE</div>
+                      <div style="font-size: 0.72rem; color: var(--text-muted);">shops.vton_enabled = true</div>
+                    </div>
+                  </div>
+                  <button class="btn-deactivate" onclick="deactivatePlugin()">
+                    <i class="fa-solid fa-power-off"></i> Deactivate
+                  </button>
+                </div>
+
+                <!-- Live status steps subtext -->
+                <div class="download-steps-log" id="downloadStepsLog">
+                  <span>Click to install neural weights & size matching engine.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Features list cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px;">
+              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                  <i class="fa-solid fa-ruler-combined" style="color: var(--primary);"></i> ML Kit Pose Estimation
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Calculates chest, waist, hips, inseam and heights automatically.</div>
+              </div>
+              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                  <i class="fa-solid fa-shirt" style="color: var(--accent-cyan);"></i> Fashn AI Virtual Try-On
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Photo-realistic try-on previews generated in under 10 seconds.</div>
+              </div>
+              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                  <i class="fa-solid fa-database" style="color: var(--accent-emerald);"></i> 1-Click Database Sync
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Live PostgreSQL updates in Supabase `shops.vton_enabled`.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Store Profile Configuration -->
+          <div class="settings-card">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">
+              <i class="fa-solid fa-store" style="color: var(--primary);"></i> Store Profile & Identity
+            </h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 20px;">
+              Configure your store credentials and metadata visible to shoppers.
+            </p>
+
+            <form onsubmit="saveStoreSettings(event)">
+              <div class="settings-form-grid">
+                <div class="form-group">
+                  <label>Store Brand Name</label>
+                  <input type="text" id="settingStoreName" class="form-input" value="Bench Philippines">
+                </div>
+                <div class="form-group">
+                  <label>Store Identifier Code (Unique)</label>
+                  <input type="text" id="settingStoreCode" class="form-input" value="BENCH" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                  <label>Support Contact Email</label>
+                  <input type="email" id="settingStoreEmail" class="form-input" value="merchant@bench.com">
+                </div>
+                <div class="form-group">
+                  <label>Default Currency</label>
+                  <select id="settingCurrency" class="form-input">
+                    <option value="USD">USD ($) - US Dollar</option>
+                    <option value="PHP" selected>PHP (₱) - Philippine Peso</option>
+                    <option value="EUR">EUR (€) - Euro</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" style="margin-top: 20px;">
+                <i class="fa-solid fa-floppy-disk"></i> Save Store Changes
+              </button>
+            </form>
+          </div>
+
+          <!-- 3. Supabase Cloud Database Connection -->
+          <div class="settings-card">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">
+              <i class="fa-solid fa-bolt" style="color: var(--accent-cyan);"></i> Supabase Cloud Sync
+            </h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 20px;">
+              Live connection parameters for your PostgreSQL backend and public garments bucket.
+            </p>
+
+            <div class="settings-form-grid">
+              <div class="form-group">
+                <label>Supabase Project URL</label>
+                <input type="text" class="form-input" value="https://iehnwpvxohddgkzkqzyd.supabase.co" readonly style="font-family: var(--font-mono); opacity: 0.85;">
+              </div>
+              <div class="form-group">
+                <label>Publishable Anon Key</label>
+                <input type="password" class="form-input" value="sb_publishable_1TDI3iodXlM4rOKSR_xZng_ShMXRDz1" readonly style="font-family: var(--font-mono); opacity: 0.85;">
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       4. Modals
+       ========================================================================= -->
+  <!-- Add Product Modal -->
+  <div id="addProductModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="productModalTitle"><i class="fa-solid fa-shirt"></i> Add New Garment Product</h3>
+        <button class="modal-close" onclick="closeModal('addProductModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleSaveProduct(event)">
+        <div class="modal-body">
+          <input type="hidden" id="prodEditId">
+          <div class="form-group">
+            <label>Product Title</label>
+            <input type="text" id="prodTitle" class="form-input" placeholder="e.g. Classic Oversized Heavyweight Tee" required>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Price ($ or ₱)</label>
+              <input type="number" id="prodPrice" class="form-input" placeholder="49.99" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select id="prodCategory" class="form-input" required>
+                <option value="tops">Tops & Shirts</option>
+                <option value="bottoms">Bottoms & Pants</option>
+                <option value="one-pieces">One-Pieces & Dresses</option>
+                <option value="outerwear">Outerwear & Jackets</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Target Gender</label>
+            <select id="prodGender" class="form-input" required>
+              <option value="unisex">Unisex</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Garment Photo URL</label>
+            <input type="url" id="prodImageUrl" class="form-input" placeholder="https://images.unsplash.com/..." required>
+            <span style="font-size: 0.72rem; color: var(--text-dim);">Paste image link or upload garment to Supabase storage.</span>
+          </div>
+          <div class="form-group">
+            <label>Available Sizes & Stock Quantity</label>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+              <div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700;">Size S</span>
+                <input type="number" id="stockS" class="form-input" value="15" min="0">
+              </div>
+              <div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700;">Size M</span>
+                <input type="number" id="stockM" class="form-input" value="25" min="0">
+              </div>
+              <div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700;">Size L</span>
+                <input type="number" id="stockL" class="form-input" value="20" min="0">
+              </div>
+              <div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700;">Size XL</span>
+                <input type="number" id="stockXL" class="form-input" value="10" min="0">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('addProductModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Category Modal -->
+  <div id="addCategoryModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-layer-group"></i> Add Garment Category</h3>
+        <button class="modal-close" onclick="closeModal('addCategoryModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleSaveCategory(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Category Name</label>
+            <input type="text" id="catName" class="form-input" placeholder="e.g. Activewear & Gym" required>
+          </div>
+          <div class="form-group">
+            <label>Category Icon (FontAwesome class)</label>
+            <input type="text" id="catIcon" class="form-input" placeholder="fa-person-running" value="fa-person-running" required>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="catDesc" class="form-input" placeholder="Sports performance and flexible garments" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('addCategoryModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Add Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Order Details Modal -->
+  <div id="orderDetailsModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="orderModalTitle">Order Details</h3>
+        <button class="modal-close" onclick="closeModal('orderDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="orderModalBody">
+        <!-- Dynamically injected -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('orderDetailsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- =========================================================================
+       5. JavaScript Execution
+       ========================================================================= -->
+  <!-- Supabase CDN (Official Client) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase Client Init -->
+  <script src="supabaseClient.js"></script>
+  <!-- Application Logic & Download Animation -->
+  <script src="app.js"></script>
+</body>
+</html>
