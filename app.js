@@ -511,41 +511,53 @@ function renderSuperShops() {
     s.ownerName.toLowerCase().includes(searchVal)
   );
 
-  const renderRow = (s, isRecent = false) => `
+  const renderRow = (s, isRecent = false) => {
+    const active = s.is_active !== false;
+    const initial = (s.name || '?').trim().charAt(0).toUpperCase();
+    return `
     <tr>
-      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan); text-transform: lowercase;">${(s.code || '').toLowerCase()}</span></td>
-      <td><strong>${s.name}</strong></td>
       <td>
-        <div style="font-weight: 600;">${s.ownerName}</div>
-        ${isRecent ? `<div style="font-size: 0.74rem; color: var(--text-dim);">${s.ownerEmail}</div>` : ''}
+        <div class="cell-store">
+          <div class="cell-avatar">${initial}</div>
+          <div class="cell-stack">
+            <span class="cell-title">${s.name}</span>
+            <span class="code-chip">${(s.code || '').toLowerCase()}</span>
+          </div>
+        </div>
       </td>
-      ${!isRecent ? `<td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${s.ownerEmail}</span></td>` : ''}
-      <td><span class="badge badge-indigo">${s.category}</span></td>
       <td>
-        <span class="badge ${s.is_active !== false ? 'badge-emerald' : 'badge-rose'}">
-          <i class="fa-solid ${s.is_active !== false ? 'fa-circle-check' : 'fa-ban'}"></i>
-          ${s.is_active !== false ? 'Active' : 'Deactivated'}
+        <div class="cell-stack">
+          <span class="cell-title">${s.ownerName}</span>
+          <span class="cell-sub">${s.ownerEmail}</span>
+        </div>
+      </td>
+      <td><span class="badge badge-indigo badge-nowrap">${s.category}</span></td>
+      <td>
+        <span class="badge badge-nowrap ${active ? 'badge-emerald' : 'badge-rose'}">
+          <i class="fa-solid ${active ? 'fa-circle-check' : 'fa-ban'}"></i>
+          ${active ? 'Active' : 'Deactivated'}
         </span>
       </td>
       <td>
-        <span class="badge ${s.vton_enabled ? 'badge-cyan' : 'badge-amber'}">
+        <span class="badge badge-nowrap ${s.vton_enabled ? 'badge-cyan' : 'badge-amber'}">
           <i class="fa-solid ${s.vton_enabled ? 'fa-wand-magic-sparkles' : 'fa-clock'}"></i>
           ${s.vton_enabled ? 'VTON Live' : 'VTON Off'}
         </span>
       </td>
       ${!isRecent ? `
-        <td>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="btn btn-outline btn-sm" onclick="openEditShopModal('${s.id}')" title="Edit Store Details">
-              <i class="fa-solid fa-pen-to-square"></i> Edit
+        <td class="col-actions">
+          <div class="row-actions">
+            <button class="icon-btn" onclick="openEditShopModal('${s.id}')" title="Edit store details" aria-label="Edit store">
+              <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button class="btn btn-outline btn-sm" style="${s.is_active !== false ? 'color: var(--accent-rose); border-color: rgba(244,63,94,0.3);' : 'color: var(--accent-emerald); border-color: rgba(16,185,129,0.3);'}" onclick="toggleShopActive('${s.id}')" title="${s.is_active !== false ? 'Deactivate Store' : 'Activate Store'}">
-              <i class="fa-solid ${s.is_active !== false ? 'fa-ban' : 'fa-check'}"></i> ${s.is_active !== false ? 'Deactivate' : 'Activate'}
+            <button class="icon-btn ${active ? 'icon-btn-warn' : 'icon-btn-success'}" onclick="toggleShopActive('${s.id}')" title="${active ? 'Deactivate store' : 'Activate store'}" aria-label="${active ? 'Deactivate store' : 'Activate store'}">
+              <i class="fa-solid ${active ? 'fa-ban' : 'fa-circle-check'}"></i>
             </button>
-            <button class="btn btn-outline btn-sm" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On SDK">
-              <i class="fa-solid fa-wand-magic-sparkles"></i> VTON
+            <button class="icon-btn icon-btn-cyan" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On engine" aria-label="Toggle VTON">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
             </button>
-            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.35);" onclick="handleDeleteShop('${s.id}', '${s.name.replace(/'/g, "\\'")}')" title="Permanently Delete Shop">
+            <span class="row-actions-divider"></span>
+            <button class="icon-btn icon-btn-danger" onclick="handleDeleteShop('${s.id}')" title="Permanently delete shop" aria-label="Delete store">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
@@ -553,16 +565,17 @@ function renderSuperShops() {
       ` : ''}
     </tr>
   `;
+  };
 
   // 1. Registered Shops Tab Table (All shops)
   if (allTbody) {
     if (filtered.length === 0) {
       allTbody.innerHTML = `
         <tr>
-          <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
-            <i class="fa-solid fa-store" style="font-size: 2rem; color: var(--text-dim); margin-bottom: 10px; display: block;"></i>
+          <td colspan="6" style="text-align: center; padding: 56px 24px; color: var(--text-muted);">
+            <i class="fa-solid fa-store" style="font-size: 2rem; color: var(--text-dim); margin-bottom: 12px; display: block;"></i>
             <strong>No Registered Merchant Stores Found</strong>
-            <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">Click the "+ Register New Shop" button above to add your first store into Supabase.</div>
+            <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 6px;">Click the "+ Register New Shop" button above to add your first store into Supabase.</div>
           </td>
         </tr>
       `;
@@ -576,8 +589,8 @@ function renderSuperShops() {
     if (shops.length === 0) {
       recentTbody.innerHTML = `
         <tr>
-          <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">
-            <i class="fa-solid fa-store-slash" style="color: var(--text-dim); margin-bottom: 6px; display: block;"></i>
+          <td colspan="5" style="text-align: center; padding: 40px 24px; color: var(--text-muted);">
+            <i class="fa-solid fa-store-slash" style="color: var(--text-dim); margin-bottom: 8px; display: block;"></i>
             No merchant stores registered yet. Provision a new shop to see it here.
           </td>
         </tr>
@@ -684,7 +697,9 @@ async function toggleShopActive(shopId) {
 }
 
 // Super Admin: Delete Shop
-async function handleDeleteShop(shopId, shopName) {
+async function handleDeleteShop(shopId) {
+  const target = shops.find(s => s.id === shopId);
+  const shopName = target ? target.name : 'this shop';
   if (!confirm(`Are you sure you want to permanently delete "${shopName}" from Supabase? This action cannot be undone.`)) {
     return;
   }

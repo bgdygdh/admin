@@ -229,8 +229,8 @@
         </div>
 
         <!-- Registered Shops Quick Table -->
-        <div class="card">
-          <div class="card-header">
+        <div class="card card-flush">
+          <div class="card-header card-header-padded">
             <div>
               <h3><i class="fa-solid fa-building" style="color: var(--primary);"></i> Registered Merchant Stores</h3>
               <span class="card-subtitle">Brands currently utilizing the Body Measurement & VTON platform</span>
@@ -240,15 +240,14 @@
               <button class="btn btn-outline btn-sm" onclick="switchTab('super-shops')">View Full Directory</button>
             </div>
           </div>
-          <div class="table-container">
-            <table>
+          <div class="table-container table-flush">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Store Code</th>
-                  <th>Shop Name</th>
+                  <th>Store</th>
                   <th>Owner</th>
                   <th>Category</th>
-                  <th>Store Status</th>
+                  <th>Status</th>
                   <th>VTON Engine</th>
                 </tr>
               </thead>
@@ -279,19 +278,17 @@
           </div>
         </div>
 
-        <div class="card">
-          <div class="table-container">
-            <table>
+        <div class="card card-flush">
+          <div class="table-container table-flush">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Store Code</th>
-                  <th>Brand Name</th>
-                  <th>Merchant Owner</th>
-                  <th>Owner Contact Email</th>
+                  <th>Store</th>
+                  <th>Owner</th>
                   <th>Category</th>
-                  <th>Store Status</th>
+                  <th>Status</th>
                   <th>VTON Engine</th>
-                  <th>Actions</th>
+                  <th class="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody id="superAllShopsTbody">

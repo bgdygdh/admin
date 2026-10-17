@@ -670,6 +670,164 @@ tr:hover td {
 }
 
 /* ==========================================================================
+   Data Tables (Super Admin shop directory) - roomy, scannable layout
+   ========================================================================== */
+.card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.card-header-padded {
+  padding: 22px 28px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.table-flush {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.data-table {
+  font-size: 0.9rem;
+}
+
+.data-table thead {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.data-table th {
+  padding: 16px 28px;
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+
+.data-table td {
+  padding: 22px 28px;
+  white-space: nowrap;
+}
+
+.data-table tbody tr {
+  transition: background 0.18s ease;
+}
+
+.data-table tbody tr:hover td {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.data-table .col-actions {
+  text-align: right;
+  width: 1%;
+}
+
+.cell-store {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cell-avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cell-title {
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.cell-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1.2;
+}
+
+.code-chip {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-light);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: lowercase;
+}
+
+.badge-nowrap {
+  white-space: nowrap;
+  padding: 6px 12px;
+}
+
+/* Compact icon action buttons */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-actions-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.icon-btn-warn { color: var(--accent-amber); }
+.icon-btn-warn:hover { color: var(--accent-amber); background: var(--accent-amber-light); border-color: rgba(245, 158, 11, 0.4); }
+
+.icon-btn-success { color: var(--accent-emerald); }
+.icon-btn-success:hover { color: var(--accent-emerald); background: var(--accent-emerald-light); border-color: rgba(16, 185, 129, 0.4); }
+
+.icon-btn-cyan { color: var(--accent-cyan); }
+.icon-btn-cyan:hover { color: var(--accent-cyan); background: var(--accent-cyan-light); border-color: rgba(6, 182, 212, 0.4); }
+
+.icon-btn-danger { color: var(--accent-rose); }
+.icon-btn-danger:hover { color: var(--accent-rose); background: var(--accent-rose-light); border-color: rgba(244, 63, 94, 0.45); }
+
+/* ==========================================================================
    Products Tab & Filters
    ========================================================================== */
 .toolbar-header {
