@@ -500,7 +500,7 @@ function switchTab(tabName) {
     'super-shops': 'Super Admin | Registered Shops Management',
     'dashboard': 'Store Dashboard Overview',
     'products': 'Garment Product Catalog',
-    'categories': 'Apparel Categories & Rules',
+    'categories': 'Apparel Categories',
     'orders': 'Customer Orders & Fit Breakdown',
     'settings': 'Store Settings & Plugin Deployment'
   };
@@ -902,7 +902,7 @@ function triggerPluginDownloadAnimation() {
 
   const steps = [
     { at: 10, label: 'Resolving dependency: body_measurement_plugin v1.2.0...' },
-    { at: 35, label: 'Downloading Google ML Kit Pose Estimation weights (12.4 MB)...' },
+    { at: 35, label: 'Downloading YOLO-seg & Keypoint weights (12.4 MB)...' },
     { at: 65, label: 'Compiling circumference calculation & size matching matrices...' },
     { at: 88, label: 'Connecting to Supabase Cloud & configuring shops.vton_enabled...' },
     { at: 100, label: 'Finalizing installation & starting real-time mobile sync...' }
