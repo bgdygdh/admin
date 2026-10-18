@@ -1423,16 +1423,26 @@ async function handleSaveProduct(e) {
     };
 
     if (editId) {
+      const existingP = products.find(item => item.id === editId);
       const res = await window.db.updateProduct(shop.id, editId, payload);
       if (!res.success) {
+        if (productImageState.file && finalImageUrl) {
+          await window.db.deleteProductImageByUrl(shop.id, finalImageUrl);
+        }
         showToast(res.error, 'error');
         if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
         return;
+      }
+      if (existingP && existingP.garment_image_url && existingP.garment_image_url !== finalImageUrl) {
+        window.db.deleteProductImageByUrl(shop.id, existingP.garment_image_url);
       }
       showToast('Product updated successfully!', 'success');
     } else {
       const res = await window.db.createProduct(shop.id, payload);
       if (!res.success) {
+        if (productImageState.file && finalImageUrl) {
+          await window.db.deleteProductImageByUrl(shop.id, finalImageUrl);
+        }
         showToast(res.error, 'error');
         if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
         return;

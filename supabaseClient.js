@@ -580,7 +580,7 @@ window.db = {
     return null;
   },
 
-  // Uploads to storage bucket. Checks 'garment-images' first, falls back to 'category-images'
+  // Uploads to storage bucket under the shop's authorized folder: {shop_id}/{uid}.{ext}
   async uploadProductImage(shopId, file) {
     if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
     const invalid = this.validateProductImage(file);
@@ -589,43 +589,49 @@ window.db = {
     const extMap = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
     const uid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const ext = extMap[file.type] || 'jpg';
+    const path = `${shopId}/${uid}.${ext}`;
 
-    // Try 'garment-images' bucket first, fallback to 'category-images' under 'products/'
-    const attempts = [
-      { bucket: this.PRODUCT_BUCKET, path: `${shopId}/${uid}.${ext}` },
-      { bucket: this.CATEGORY_BUCKET, path: `products/${shopId}/${uid}.${ext}` }
-    ];
+    // Target category-images bucket which has RLS policies configured for {shop_id}/*
+    try {
+      const { error: upErr } = await supabaseClient.storage
+        .from(this.CATEGORY_BUCKET)
+        .upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
 
-    let lastError = null;
-    for (const attempt of attempts) {
-      try {
-        const { error: upErr } = await supabaseClient.storage
-          .from(attempt.bucket)
-          .upload(attempt.path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
-
-        if (!upErr) {
-          const { data } = supabaseClient.storage.from(attempt.bucket).getPublicUrl(attempt.path);
-          return { success: true, url: data.publicUrl, path: attempt.path, bucket: attempt.bucket };
-        }
-        lastError = upErr;
-      } catch (err) {
-        lastError = err;
+      if (!upErr) {
+        const { data } = supabaseClient.storage.from(this.CATEGORY_BUCKET).getPublicUrl(path);
+        return { success: true, url: data.publicUrl, path, bucket: this.CATEGORY_BUCKET };
       }
-    }
 
-    return { success: false, error: `Image upload failed: ${lastError?.message || 'Storage unavailable'}` };
+      // If category-images failed because the bucket is not found, try garment-images
+      if (upErr.message && upErr.message.toLowerCase().includes('bucket not found')) {
+        const { error: prodErr } = await supabaseClient.storage
+          .from(this.PRODUCT_BUCKET)
+          .upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+
+        if (!prodErr) {
+          const { data } = supabaseClient.storage.from(this.PRODUCT_BUCKET).getPublicUrl(path);
+          return { success: true, url: data.publicUrl, path, bucket: this.PRODUCT_BUCKET };
+        }
+        return { success: false, error: `Image upload failed: ${prodErr.message}` };
+      }
+
+      return { success: false, error: `Image upload failed: ${upErr.message}` };
+    } catch (err) {
+      console.error('Error uploading product image:', err);
+      return { success: false, error: `Image upload failed: ${err.message}` };
+    }
   },
 
   async deleteProductImageByUrl(shopId, url) {
     if (!supabaseClient || !url) return;
     try {
-      const buckets = [this.PRODUCT_BUCKET, this.CATEGORY_BUCKET];
+      const buckets = [this.CATEGORY_BUCKET, this.PRODUCT_BUCKET];
       for (const bucket of buckets) {
         const marker = `/${bucket}/`;
         const idx = url.indexOf(marker);
         if (idx !== -1) {
           const path = decodeURIComponent(url.substring(idx + marker.length).split('?')[0]);
-          if (path.includes(shopId)) {
+          if (path.startsWith(`${shopId}/`)) {
             await supabaseClient.storage.from(bucket).remove([path]);
           }
           break;
