@@ -23,89 +23,12 @@ let currentUser = JSON.parse(localStorage.getItem('antigravity_current_user')) |
 
 let isLoggedIn = localStorage.getItem('antigravity_admin_auth') === 'true';
 
-// Dummy Garments Dataset (For Shop Owner)
-let products = JSON.parse(localStorage.getItem('antigravity_admin_products')) || [
-  {
-    id: 'prod-001',
-    title: 'Classic Oversized Heavyweight Tee',
-    price: 34.99,
-    category: 'tops',
-    gender: 'unisex',
-    imageUrl: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 18, M: 24, L: 19, XL: 8 },
-    vton: true
-  },
-  {
-    id: 'prod-002',
-    title: 'Slim-Fit Oxford Button-Down Shirt',
-    price: 58.00,
-    category: 'tops',
-    gender: 'male',
-    imageUrl: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 10, M: 22, L: 15, XL: 6 },
-    vton: true
-  },
-  {
-    id: 'prod-003',
-    title: 'High-Rise Straight Leg Denim Jeans',
-    price: 79.50,
-    category: 'bottoms',
-    gender: 'female',
-    imageUrl: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 14, M: 18, L: 12, XL: 4 },
-    vton: true
-  },
-  {
-    id: 'prod-004',
-    title: 'Pleated Wide-Leg Chino Trousers',
-    price: 68.00,
-    category: 'bottoms',
-    gender: 'male',
-    imageUrl: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 8, M: 16, L: 20, XL: 10 },
-    vton: true
-  },
-  {
-    id: 'prod-005',
-    title: 'Floral Tiered Midi Summer Dress',
-    price: 89.00,
-    category: 'one-pieces',
-    gender: 'female',
-    imageUrl: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 12, M: 20, L: 8, XL: 2 },
-    vton: true
-  },
-  {
-    id: 'prod-006',
-    title: 'Minimalist Heavyweight Zip Hoodie',
-    price: 95.00,
-    category: 'outerwear',
-    gender: 'unisex',
-    imageUrl: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 15, M: 30, L: 25, XL: 12 },
-    vton: true
-  },
-  {
-    id: 'prod-007',
-    title: 'Water-Resistant Technical Windbreaker',
-    price: 120.00,
-    category: 'outerwear',
-    gender: 'unisex',
-    imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 6, M: 14, L: 18, XL: 7 },
-    vton: true
-  },
-  {
-    id: 'prod-008',
-    title: 'Linen Relaxed Short Sleeve Shirt',
-    price: 45.00,
-    category: 'tops',
-    gender: 'male',
-    imageUrl: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=700&q=80',
-    stock: { S: 16, M: 22, L: 14, XL: 5 },
-    vton: true
-  }
-];
+// Products (live from Supabase public.products, scoped to the owner's shop)
+let products = [];
+let productsShopId = null;        // which shop the in-memory product catalog belongs to
+let productsLoaded = false;
+let productsLoading = false;
+let productsError = null;
 
 // Categories (live from Supabase public.categories, scoped to the owner's shop)
 let categories = [];
@@ -369,6 +292,7 @@ async function handleLogout() {
   localStorage.removeItem('antigravity_admin_auth');
   localStorage.removeItem('antigravity_current_user');
   resetCategoriesState();
+  resetProductsState();
   isDownloading = false;
   document.getElementById('authWrapper').classList.remove('hidden');
   showToast('Logged out of session.', 'info');
@@ -469,8 +393,9 @@ function applyRoleNavigation() {
     if (codeInput) codeInput.value = shop.code;
     if (emailInput) emailInput.value = shop.ownerEmail;
 
-    // Load this shop's categories (sidebar badge + Categories tab)
+    // Load this shop's categories and products (sidebar badges + tabs)
     loadCategories();
+    loadProducts();
 
     // Re-render the VTON plugin widget for THIS shop, then confirm it against the database
     updatePluginStateUI();
@@ -509,6 +434,11 @@ function switchTab(tabName) {
   // Automatically refresh live data from Supabase for Super Admin views
   if (tabName === 'super-dashboard' || tabName === 'super-shops') {
     syncSupabaseShops();
+  }
+
+  // Refresh this shop's products whenever the tab is opened
+  if (tabName === 'products') {
+    loadProducts(true);
   }
 
   // Refresh this shop's categories whenever the tab is opened
@@ -1034,73 +964,342 @@ function updatePluginStateUI() {
 }
 
 // =============================================================================
-// 7. Products CRUD & Rendering (For Shop Owners)
+// 7. Products CRUD & Rendering (LIVE SUPABASE SYNC FOR STORE OWNERS)
 // =============================================================================
+
+function resetProductsState() {
+  products = [];
+  productsShopId = null;
+  productsLoaded = false;
+  productsLoading = false;
+  productsError = null;
+  resetProductImageState(null);
+}
+
+function formatRelativeDate(dateString) {
+  if (!dateString) return 'Just now';
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'Recently';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'Recently';
+  }
+}
+
+// ---- Product image state & dropzone handling ---------------------------------
+const productImageState = { file: null, existingUrl: null, removed: false, objectUrl: null };
+
+function resetProductImageState(existingUrl = null) {
+  if (productImageState.objectUrl) URL.revokeObjectURL(productImageState.objectUrl);
+  productImageState.file = null;
+  productImageState.existingUrl = existingUrl;
+  productImageState.removed = false;
+  productImageState.objectUrl = null;
+
+  const input = document.getElementById('prodImageInput');
+  if (input) input.value = '';
+  const urlInput = document.getElementById('prodImageUrl');
+  if (urlInput) urlInput.value = existingUrl || '';
+
+  setProductPreview(existingUrl);
+}
+
+function setProductPreview(src) {
+  const empty = document.getElementById('prodDropzoneEmpty');
+  const preview = document.getElementById('prodDropzonePreview');
+  const img = document.getElementById('prodImagePreviewImg');
+  if (!empty || !preview || !img) return;
+
+  if (src) {
+    img.src = src;
+    empty.style.display = 'none';
+    preview.style.display = 'block';
+  } else {
+    img.src = '';
+    empty.style.display = 'block';
+    preview.style.display = 'none';
+  }
+}
+
+function acceptProductImageFile(file) {
+  if (!file) return;
+  const problem = window.db.validateProductImage(file);
+  if (problem) {
+    showToast(problem, 'error');
+    return;
+  }
+  if (productImageState.objectUrl) URL.revokeObjectURL(productImageState.objectUrl);
+  productImageState.file = file;
+  productImageState.removed = false;
+  productImageState.objectUrl = URL.createObjectURL(file);
+  setProductPreview(productImageState.objectUrl);
+  const urlInput = document.getElementById('prodImageUrl');
+  if (urlInput) urlInput.value = '';
+}
+
+function handleProductImageChosen(e) {
+  acceptProductImageFile(e.target.files && e.target.files[0]);
+}
+
+function handleProductImageDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('prodDropzone');
+  if (dz) dz.classList.remove('dragover');
+  acceptProductImageFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+}
+
+function removeProductImage(e) {
+  if (e) e.stopPropagation();
+  if (productImageState.objectUrl) URL.revokeObjectURL(productImageState.objectUrl);
+  productImageState.file = null;
+  productImageState.objectUrl = null;
+  productImageState.removed = !!productImageState.existingUrl;
+  const input = document.getElementById('prodImageInput');
+  if (input) input.value = '';
+  const urlInput = document.getElementById('prodImageUrl');
+  if (urlInput) urlInput.value = '';
+  setProductPreview(null);
+}
+
+function handleProductImageUrlInput(url) {
+  const trimmed = (url || '').trim();
+  if (trimmed) {
+    if (productImageState.objectUrl) URL.revokeObjectURL(productImageState.objectUrl);
+    productImageState.file = null;
+    setProductPreview(trimmed);
+  } else {
+    setProductPreview(null);
+  }
+}
+
+function updateProdDescCounter() {
+  const desc = document.getElementById('prodDescription');
+  const counter = document.getElementById('prodDescCounter');
+  if (desc && counter) {
+    counter.textContent = `${desc.value.length} / 500`;
+  }
+}
+
+// Populates category dropdowns dynamically from shop's active categories
+function updateProductCategoryDropdowns() {
+  // 1. Toolbar filter (#productCategoryFilter)
+  const filterSelect = document.getElementById('productCategoryFilter');
+  if (filterSelect) {
+    const curVal = filterSelect.value;
+    const activeCats = categories.filter(c => c.is_active);
+    const opts = [
+      '<option value="all">All Categories</option>',
+      ...activeCats.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`),
+      '<option value="unassigned">No Category (General)</option>'
+    ];
+    filterSelect.innerHTML = opts.join('');
+    if (curVal && filterSelect.querySelector(`option[value="${curVal}"]`)) {
+      filterSelect.value = curVal;
+    }
+  }
+
+  // 2. Modal category select (#prodCategory)
+  const modalSelect = document.getElementById('prodCategory');
+  if (modalSelect) {
+    const curVal = modalSelect.value;
+    const activeCats = categories.filter(c => c.is_active);
+    const opts = [
+      '<option value="">No Category (General)</option>',
+      ...activeCats.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
+    ];
+    modalSelect.innerHTML = opts.join('');
+    if (curVal && modalSelect.querySelector(`option[value="${curVal}"]`)) {
+      modalSelect.value = curVal;
+    }
+  }
+}
+
+// ---- Data fetching & rendering ----------------------------------------------
+async function loadProducts(force = false) {
+  const shop = getCurrentShop();
+  if (!shop || !shop.id) {
+    products = [];
+    productsLoaded = true;
+    renderProducts();
+    return;
+  }
+
+  // If already loaded for this shop and not forcing refresh, just render
+  if (!force && productsLoaded && productsShopId === shop.id) {
+    renderProducts();
+    return;
+  }
+
+  if (productsLoading) return;
+  productsLoading = true;
+  productsError = null;
+  renderProductsSkeleton();
+
+  // Ensure categories are loaded so category names & filter dropdowns work
+  if (!categoriesLoaded || categoriesShopId !== shop.id) {
+    loadCategories().catch(() => {});
+  }
+
+  const res = await window.db.fetchProducts(shop.id);
+  productsLoading = false;
+
+  if (res.success) {
+    products = res.products || [];
+    productsShopId = shop.id;
+    productsLoaded = true;
+    productsError = null;
+    updateProductCategoryDropdowns();
+    renderProducts();
+  } else {
+    productsError = res.error || 'Failed to load products.';
+    renderProductsError();
+  }
+}
+
+function renderProductsSkeleton() {
+  const container = document.getElementById('productsGridContainer');
+  if (!container) return;
+  container.innerHTML = Array.from({ length: 4 }).map(() => `
+    <div class="product-card" style="pointer-events: none; opacity: 0.65;">
+      <div class="product-thumb skeleton-block" style="height: 240px; background: rgba(30, 41, 59, 0.4);"></div>
+      <div class="product-info">
+        <div class="skeleton-block" style="height: 18px; width: 75%; margin-bottom: 8px; background: rgba(255,255,255,0.06); border-radius: 4px;"></div>
+        <div class="skeleton-block" style="height: 14px; width: 45%; margin-bottom: 12px; background: rgba(255,255,255,0.06); border-radius: 4px;"></div>
+        <div class="skeleton-block" style="height: 12px; width: 90%; margin-bottom: 6px; background: rgba(255,255,255,0.04); border-radius: 4px;"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderProductsError() {
+  const container = document.getElementById('productsGridContainer');
+  if (!container) return;
+  container.innerHTML = `
+    <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle);">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size: 2.2rem; color: var(--accent-rose); margin-bottom: 12px;"></i>
+      <h4 style="font-size: 1.1rem; color: #fff; margin-bottom: 6px;">Failed to load products</h4>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px;">${escapeHtml(productsError || 'Network or database error.')}</p>
+      <button class="btn btn-outline" onclick="loadProducts(true)"><i class="fa-solid fa-arrows-rotate"></i> Try Again</button>
+    </div>
+  `;
+}
 
 function renderProducts() {
   const container = document.getElementById('productsGridContainer');
   if (!container) return;
 
-  const searchVal = (document.getElementById('productSearchInput')?.value || '').toLowerCase();
-  const catFilter = document.getElementById('categoryFilter')?.value || 'all';
-  const genderFilter = document.getElementById('genderFilter')?.value || 'all';
+  if (productsLoading) return;
+  if (productsError) {
+    renderProductsError();
+    return;
+  }
+
+  const searchVal = (document.getElementById('productSearchInput')?.value || '').toLowerCase().trim();
+  const catFilter = document.getElementById('productCategoryFilter')?.value || 'all';
+  const garmentTypeFilter = document.getElementById('productGarmentTypeFilter')?.value || 'all';
+  const genderFilter = document.getElementById('productGenderFilter')?.value || 'all';
+  const statusFilter = document.getElementById('productStatusFilter')?.value || 'all';
 
   const filtered = products.filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(searchVal);
-    const matchesCat = catFilter === 'all' || p.category === catFilter;
+    const matchesSearch = !searchVal || p.title.toLowerCase().includes(searchVal) || (p.description && p.description.toLowerCase().includes(searchVal));
+    const matchesCat = catFilter === 'all'
+      ? true
+      : catFilter === 'unassigned'
+        ? !p.category_id
+        : p.category_id === catFilter;
+    const matchesGarmentType = garmentTypeFilter === 'all' || p.garment_type === garmentTypeFilter;
     const matchesGender = genderFilter === 'all' || p.gender === genderFilter;
-    return matchesSearch && matchesCat && matchesGender;
+    const matchesStatus = statusFilter === 'all'
+      ? true
+      : statusFilter === 'active'
+        ? p.is_active
+        : !p.is_active;
+
+    return matchesSearch && matchesCat && matchesGarmentType && matchesGender && matchesStatus;
   });
 
   const countBadge = document.getElementById('sidebarProductCount');
   const statBadge = document.getElementById('statProducts');
+  const activeCount = products.filter(p => p.is_active).length;
   if (countBadge) countBadge.textContent = products.length;
-  if (statBadge) statBadge.textContent = products.length;
+  if (statBadge) statBadge.textContent = activeCount;
 
   if (filtered.length === 0) {
+    const isSearching = searchVal || catFilter !== 'all' || garmentTypeFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all';
     container.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 48px; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle);">
-        <i class="fa-solid fa-shirt" style="font-size: 2.5rem; color: var(--text-dim); margin-bottom: 12px;"></i>
-        <h4 style="font-size: 1.1rem; color: var(--text-muted);">No garment products found</h4>
+      <div style="grid-column: 1 / -1; text-align: center; padding: 56px 20px; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle);">
+        <i class="fa-solid fa-shirt" style="font-size: 2.6rem; color: var(--text-dim); margin-bottom: 14px;"></i>
+        <h4 style="font-size: 1.15rem; color: #fff; margin-bottom: 6px;">${isSearching ? 'No garments match your filters' : 'No garments in your catalog yet'}</h4>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 18px;">
+          ${isSearching ? 'Try clearing the search or changing filter criteria.' : 'Add your first apparel product to start sizing and virtual try-ons.'}
+        </p>
+        ${!isSearching ? `<button class="btn btn-primary" onclick="openAddProductModal()"><i class="fa-solid fa-plus"></i> Add First Garment</button>` : ''}
       </div>
     `;
     return;
   }
 
-  container.innerHTML = filtered.map(p => `
-    <div class="product-card">
-      <div class="product-thumb">
-        <img src="${p.imageUrl}" alt="${p.title}" loading="lazy">
-        <span class="product-category-tag">${p.category.toUpperCase()}</span>
-        ${p.vton ? `<span class="product-vton-badge"><i class="fa-solid fa-wand-magic-sparkles"></i> VTON</span>` : ''}
-      </div>
-      <div class="product-info">
-        <h4 class="product-title" title="${p.title}">${p.title}</h4>
-        <div class="product-price">$${p.price.toFixed(2)}</div>
-        <div class="product-sizes">
-          ${Object.entries(p.stock).map(([size, count]) => `
-            <span class="size-pill ${count > 0 ? 'has-stock' : ''}">
-              ${size}: ${count}
+  // Build category lookup map
+  const catMap = {};
+  categories.forEach(c => { catMap[c.id] = c.name; });
+
+  container.innerHTML = filtered.map(p => {
+    const categoryName = p.category_id && catMap[p.category_id] ? catMap[p.category_id] : 'General';
+    const typeLabel = {
+      'tops': 'Tops',
+      'bottoms': 'Bottoms',
+      'one-pieces': 'One-Piece',
+      'outerwear': 'Outerwear'
+    }[p.garment_type] || (p.garment_type ? p.garment_type.toUpperCase() : 'Tops');
+
+    const genderLabel = {
+      'unisex': 'Unisex',
+      'male': 'Men',
+      'female': 'Women'
+    }[p.gender] || 'Unisex';
+
+    return `
+      <div class="product-card ${p.is_active ? '' : 'is-archived'}">
+        <div class="product-thumb">
+          ${p.garment_image_url
+            ? `<img src="${escapeHtml(p.garment_image_url)}" alt="${escapeHtml(p.title)}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'product-thumb-placeholder\\'><i class=\\'fa-solid fa-shirt\\'></i></div>';">`
+            : `<div class="product-thumb-placeholder"><i class="fa-solid fa-shirt"></i></div>`
+          }
+          <span class="product-category-tag">${escapeHtml(categoryName.toUpperCase())}</span>
+          <span class="product-vton-badge"><i class="fa-solid fa-wand-magic-sparkles"></i> VTON</span>
+        </div>
+        <div class="product-info">
+          <div class="product-meta-row">
+            <span class="product-badge-pill type-pill"><i class="fa-solid fa-tag"></i> ${escapeHtml(typeLabel)}</span>
+            <span class="product-badge-pill gender-pill"><i class="fa-solid fa-user"></i> ${escapeHtml(genderLabel)}</span>
+            <span class="product-badge-pill ${p.is_active ? 'status-pill-active' : 'status-pill-archived'}">
+              <i class="fa-solid fa-circle" style="font-size: 0.5rem;"></i> ${p.is_active ? 'Active' : 'Archived'}
             </span>
-          `).join('')}
-        </div>
-        <div class="product-footer">
-          <div class="stock-indicator">
-            <i class="fa-solid fa-circle-check"></i>
-            <span>${Object.values(p.stock).reduce((a, b) => a + b, 0)} Total Stock</span>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')" title="Edit Product">
-              <i class="fa-solid fa-pen-to-square"></i>
-            </button>
-            <button class="btn btn-outline btn-sm" style="color: var(--accent-rose);" onclick="deleteProduct('${p.id}')" title="Delete">
-              <i class="fa-solid fa-trash"></i>
-            </button>
+          <h4 class="product-title" title="${escapeHtml(p.title)}">${escapeHtml(p.title)}</h4>
+          <div class="product-price">₱${p.price.toFixed(2)}</div>
+          <div class="product-description-snippet">${escapeHtml(p.description || 'No detailed description added yet.')}</div>
+          <div class="product-footer">
+            <div style="font-size: 0.72rem; color: var(--text-muted);">
+              <i class="fa-regular fa-clock"></i> ${formatRelativeDate(p.created_at)}
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-outline btn-sm" onclick="editProduct('${p.id}')" title="Edit Product">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button class="btn btn-outline btn-sm" onclick="toggleProductActive('${p.id}')" title="${p.is_active ? 'Archive Product' : 'Restore Product'}">
+                <i class="fa-solid ${p.is_active ? 'fa-box-archive' : 'fa-box-open'}"></i>
+              </button>
+              <button class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.3);" onclick="deleteProduct('${p.id}')" title="Delete Product">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function filterProducts() {
@@ -1108,18 +1307,29 @@ function filterProducts() {
 }
 
 function openAddProductModal() {
+  const shop = getCurrentShop();
+  if (!shop || !shop.id) {
+    showToast('Please sign in to a registered shop.', 'error');
+    return;
+  }
+
   document.getElementById('productModalTitle').innerHTML = '<i class="fa-solid fa-shirt"></i> Add New Garment Product';
   document.getElementById('prodEditId').value = '';
   document.getElementById('prodTitle').value = '';
   document.getElementById('prodPrice').value = '';
-  document.getElementById('prodCategory').value = 'tops';
+  document.getElementById('prodGarmentType').value = 'tops';
   document.getElementById('prodGender').value = 'unisex';
-  document.getElementById('prodImageUrl').value = '';
-  document.getElementById('stockS').value = 15;
-  document.getElementById('stockM').value = 25;
-  document.getElementById('stockL').value = 20;
-  document.getElementById('stockXL').value = 10;
+  document.getElementById('prodDescription').value = '';
+  updateProdDescCounter();
+  document.getElementById('prodIsActive').checked = true;
+  document.getElementById('saveProductBtnText').textContent = 'Save Product';
+
+  updateProductCategoryDropdowns();
+  document.getElementById('prodCategory').value = '';
+
+  resetProductImageState(null);
   openModal('addProductModal');
+  document.getElementById('prodTitle').focus();
 }
 
 function editProduct(prodId) {
@@ -1128,66 +1338,158 @@ function editProduct(prodId) {
 
   document.getElementById('productModalTitle').innerHTML = '<i class="fa-solid fa-pen"></i> Edit Garment Product';
   document.getElementById('prodEditId').value = p.id;
-  document.getElementById('prodTitle').value = p.title;
-  document.getElementById('prodPrice').value = p.price;
-  document.getElementById('prodCategory').value = p.category;
-  document.getElementById('prodGender').value = p.gender;
-  document.getElementById('prodImageUrl').value = p.imageUrl;
-  document.getElementById('stockS').value = p.stock.S || 0;
-  document.getElementById('stockM').value = p.stock.M || 0;
-  document.getElementById('stockL').value = p.stock.L || 0;
-  document.getElementById('stockXL').value = p.stock.XL || 0;
+  document.getElementById('prodTitle').value = p.title || '';
+  document.getElementById('prodPrice').value = p.price || '';
+  document.getElementById('prodGarmentType').value = p.garment_type || 'tops';
+  document.getElementById('prodGender').value = p.gender || 'unisex';
+  document.getElementById('prodDescription').value = p.description || '';
+  updateProdDescCounter();
+  document.getElementById('prodIsActive').checked = p.is_active !== false;
+  document.getElementById('saveProductBtnText').textContent = 'Update Product';
 
+  updateProductCategoryDropdowns();
+  document.getElementById('prodCategory').value = p.category_id || '';
+
+  resetProductImageState(p.garment_image_url || null);
   openModal('addProductModal');
 }
 
-function handleSaveProduct(e) {
-  e.preventDefault();
-  const editId = document.getElementById('prodEditId').value;
-  const title = document.getElementById('prodTitle').value.trim();
-  const price = parseFloat(document.getElementById('prodPrice').value);
-  const category = document.getElementById('prodCategory').value;
-  const gender = document.getElementById('prodGender').value;
-  const imageUrl = document.getElementById('prodImageUrl').value.trim();
-  const stock = {
-    S: parseInt(document.getElementById('stockS').value) || 0,
-    M: parseInt(document.getElementById('stockM').value) || 0,
-    L: parseInt(document.getElementById('stockL').value) || 0,
-    XL: parseInt(document.getElementById('stockXL').value) || 0,
-  };
-
-  if (editId) {
-    const idx = products.findIndex(p => p.id === editId);
-    if (idx !== -1) {
-      products[idx] = { ...products[idx], title, price, category, gender, imageUrl, stock };
-      showToast('Product updated successfully!', 'success');
-    }
-  } else {
-    const newProduct = {
-      id: `prod-${Date.now()}`,
-      title,
-      price,
-      category,
-      gender,
-      imageUrl,
-      stock,
-      vton: true
-    };
-    products.unshift(newProduct);
-    showToast('New garment added to catalog!', 'success');
-  }
-
-  localStorage.setItem('antigravity_admin_products', JSON.stringify(products));
+function closeProductModal() {
   closeModal('addProductModal');
-  renderProducts();
+  resetProductImageState(null);
 }
 
-function deleteProduct(prodId) {
-  if (confirm('Are you sure you want to delete this garment?')) {
-    products = products.filter(p => p.id !== prodId);
-    localStorage.setItem('antigravity_admin_products', JSON.stringify(products));
-    showToast('Product deleted.', 'info');
+async function handleSaveProduct(e) {
+  e.preventDefault();
+  const shop = getCurrentShop();
+  if (!shop || !shop.id) {
+    showToast('No active shop found.', 'error');
+    return;
+  }
+
+  const editId = document.getElementById('prodEditId').value.trim();
+  const title = document.getElementById('prodTitle').value.trim();
+  const price = parseFloat(document.getElementById('prodPrice').value);
+  const garment_type = document.getElementById('prodGarmentType').value;
+  const gender = document.getElementById('prodGender').value;
+  const category_id = document.getElementById('prodCategory').value || null;
+  const description = document.getElementById('prodDescription').value.trim();
+  const is_active = document.getElementById('prodIsActive').checked;
+
+  if (!title) {
+    showToast('Product title is required.', 'error');
+    return;
+  }
+  if (isNaN(price) || price < 0) {
+    showToast('Please enter a valid price.', 'error');
+    return;
+  }
+
+  const saveBtn = document.getElementById('btnSaveProduct');
+  const originalBtnHtml = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+  }
+
+  try {
+    let finalImageUrl = productImageState.existingUrl;
+
+    // If user provided a new file to upload
+    if (productImageState.file) {
+      const up = await window.db.uploadProductImage(shop.id, productImageState.file);
+      if (!up.success) {
+        showToast(up.error, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
+        return;
+      }
+      finalImageUrl = up.url;
+    } else if (productImageState.removed) {
+      finalImageUrl = null;
+    } else {
+      // Check if user manually typed a URL in the text box
+      const manualUrl = (document.getElementById('prodImageUrl')?.value || '').trim();
+      if (manualUrl) finalImageUrl = manualUrl;
+    }
+
+    const payload = {
+      title,
+      description,
+      price,
+      garment_type,
+      gender,
+      garment_image_url: finalImageUrl,
+      category_id,
+      is_active
+    };
+
+    if (editId) {
+      const res = await window.db.updateProduct(shop.id, editId, payload);
+      if (!res.success) {
+        showToast(res.error, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
+        return;
+      }
+      showToast('Product updated successfully!', 'success');
+    } else {
+      const res = await window.db.createProduct(shop.id, payload);
+      if (!res.success) {
+        showToast(res.error, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
+        return;
+      }
+      showToast('New garment added to catalog!', 'success');
+    }
+
+    closeProductModal();
+    await loadProducts(true);
+  } catch (err) {
+    console.error('Save product error:', err);
+    showToast(err.message || 'Failed to save product.', 'error');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = originalBtnHtml;
+    }
+  }
+}
+
+async function toggleProductActive(prodId) {
+  const shop = getCurrentShop();
+  if (!shop || !shop.id) return;
+
+  const p = products.find(item => item.id === prodId);
+  if (!p) return;
+
+  const newStatus = !p.is_active;
+  const res = await window.db.setProductActive(shop.id, prodId, newStatus);
+  if (res.success) {
+    p.is_active = newStatus;
+    showToast(`Product ${newStatus ? 'restored to active' : 'archived'}.`, 'info');
     renderProducts();
+  } else {
+    showToast(res.error || 'Failed to update product status.', 'error');
+  }
+}
+
+async function deleteProduct(prodId) {
+  const shop = getCurrentShop();
+  if (!shop || !shop.id) return;
+
+  const p = products.find(item => item.id === prodId);
+  const title = p ? p.title : 'this garment';
+
+  if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
+
+  const res = await window.db.deleteProduct(shop.id, prodId);
+  if (res.success) {
+    if (p && p.garment_image_url) {
+      window.db.deleteProductImageByUrl(shop.id, p.garment_image_url);
+    }
+    showToast('Product deleted from catalog.', 'info');
+    await loadProducts(true);
+  } else {
+    showToast(res.error || 'Failed to delete product.', 'error');
   }
 }
 
@@ -1261,6 +1563,7 @@ async function loadCategories(force = false) {
   if (res.success) {
     categories = res.categories;
     categoriesLoaded = true;
+    updateProductCategoryDropdowns();
   } else {
     categoriesError = res.error;
   }

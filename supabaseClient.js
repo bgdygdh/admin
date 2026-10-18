@@ -525,6 +525,214 @@ window.db = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // 9. Products (per shop) - strictly scoped by shop_id.
+  // ---------------------------------------------------------------------------
+  PRODUCT_BUCKET: 'garment-images',
+  PRODUCT_IMAGE_MAX_BYTES: 4 * 1024 * 1024,
+  PRODUCT_IMAGE_TYPES: ['image/png', 'image/jpeg', 'image/webp'],
+
+  _productError(err) {
+    if (err && err.message) return err.message;
+    return 'Unexpected database error while updating product.';
+  },
+
+  async fetchProducts(shopId) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('id, shop_id, title, description, price, garment_type, gender, garment_image_url, is_active, created_at, category_id')
+        .eq('shop_id', shopId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const products = (data || []).map(p => ({
+        id: p.id,
+        shop_id: p.shop_id,
+        title: p.title || '',
+        description: p.description || '',
+        price: Number(p.price) || 0,
+        garment_type: p.garment_type || 'tops',
+        gender: p.gender || 'unisex',
+        garment_image_url: p.garment_image_url || null,
+        is_active: p.is_active !== false,
+        created_at: p.created_at,
+        category_id: p.category_id || null
+      }));
+
+      return { success: true, products };
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      return { success: false, error: this._productError(err) };
+    }
+  },
+
+  validateProductImage(file) {
+    if (!file) return null;
+    if (!this.PRODUCT_IMAGE_TYPES.includes(file.type)) {
+      return 'Image must be a PNG, JPG or WebP file.';
+    }
+    if (file.size > this.PRODUCT_IMAGE_MAX_BYTES) {
+      return 'Image must be 4 MB or smaller.';
+    }
+    return null;
+  },
+
+  // Uploads to storage bucket. Checks 'garment-images' first, falls back to 'category-images'
+  async uploadProductImage(shopId, file) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    const invalid = this.validateProductImage(file);
+    if (invalid) return { success: false, error: invalid };
+
+    const extMap = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+    const uid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const ext = extMap[file.type] || 'jpg';
+
+    // Try 'garment-images' bucket first, fallback to 'category-images' under 'products/'
+    const attempts = [
+      { bucket: this.PRODUCT_BUCKET, path: `${shopId}/${uid}.${ext}` },
+      { bucket: this.CATEGORY_BUCKET, path: `products/${shopId}/${uid}.${ext}` }
+    ];
+
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        const { error: upErr } = await supabaseClient.storage
+          .from(attempt.bucket)
+          .upload(attempt.path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+
+        if (!upErr) {
+          const { data } = supabaseClient.storage.from(attempt.bucket).getPublicUrl(attempt.path);
+          return { success: true, url: data.publicUrl, path: attempt.path, bucket: attempt.bucket };
+        }
+        lastError = upErr;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    return { success: false, error: `Image upload failed: ${lastError?.message || 'Storage unavailable'}` };
+  },
+
+  async deleteProductImageByUrl(shopId, url) {
+    if (!supabaseClient || !url) return;
+    try {
+      const buckets = [this.PRODUCT_BUCKET, this.CATEGORY_BUCKET];
+      for (const bucket of buckets) {
+        const marker = `/${bucket}/`;
+        const idx = url.indexOf(marker);
+        if (idx !== -1) {
+          const path = decodeURIComponent(url.substring(idx + marker.length).split('?')[0]);
+          if (path.includes(shopId)) {
+            await supabaseClient.storage.from(bucket).remove([path]);
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not remove old product image:', err.message);
+    }
+  },
+
+  async createProduct(shopId, { title, description, price, garment_type, gender, garment_image_url, category_id, is_active }) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const record = {
+        shop_id: shopId,
+        title: title.trim(),
+        description: description ? description.trim() : null,
+        price: Number(price) || 0,
+        garment_type: garment_type || 'tops',
+        gender: gender || 'unisex',
+        garment_image_url: garment_image_url ? garment_image_url.trim() : null,
+        category_id: category_id || null,
+        is_active: is_active !== false
+      };
+
+      const { data, error } = await supabaseClient
+        .from('products')
+        .insert(record)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error creating product:', err);
+      return { success: false, error: this._productError(err) };
+    }
+  },
+
+  async updateProduct(shopId, productId, { title, description, price, garment_type, gender, garment_image_url, category_id, is_active }) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const updates = {
+        title: title.trim(),
+        description: description ? description.trim() : null,
+        price: Number(price) || 0,
+        garment_type: garment_type || 'tops',
+        gender: gender || 'unisex',
+        garment_image_url: garment_image_url ? garment_image_url.trim() : null,
+        category_id: category_id || null
+      };
+      if (typeof is_active === 'boolean') {
+        updates.is_active = is_active;
+      }
+
+      const { data, error } = await supabaseClient
+        .from('products')
+        .update(updates)
+        .eq('id', productId)
+        .eq('shop_id', shopId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error updating product:', err);
+      return { success: false, error: this._productError(err) };
+    }
+  },
+
+  async setProductActive(shopId, productId, isActive) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .update({ is_active: isActive })
+        .eq('id', productId)
+        .eq('shop_id', shopId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error updating product active status:', err);
+      return { success: false, error: this._productError(err) };
+    }
+  },
+
+  async deleteProduct(shopId, productId) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { error } = await supabaseClient
+        .from('products')
+        .delete()
+        .eq('id', productId)
+        .eq('shop_id', shopId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err) {
+      console.error('Error deleting product:', err);
+      return { success: false, error: this._productError(err) };
+    }
+  },
+
   async logout() {
     if (supabaseClient) {
       await supabaseClient.auth.signOut();
