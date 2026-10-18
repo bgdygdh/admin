@@ -1249,8 +1249,7 @@ function renderProducts() {
     const typeLabel = {
       'tops': 'Tops',
       'bottoms': 'Bottoms',
-      'one-pieces': 'One-Piece',
-      'outerwear': 'Outerwear'
+      'one-pieces': 'One-Piece'
     }[p.garment_type] || (p.garment_type ? p.garment_type.toUpperCase() : 'Tops');
 
     const genderLabel = {

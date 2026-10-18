@@ -467,7 +467,6 @@
               <option value="tops">Tops & Shirts</option>
               <option value="bottoms">Bottoms & Pants</option>
               <option value="one-pieces">One-Pieces & Dresses</option>
-              <option value="outerwear">Outerwear & Jackets</option>
             </select>
             <select id="productGenderFilter" class="custom-select" onchange="filterProducts()">
               <option value="all">All Genders</option>
@@ -813,90 +812,96 @@
         <div class="modal-body">
           <input type="hidden" id="prodEditId">
 
-          <!-- 1. Product Title -->
-          <div class="form-group">
-            <label for="prodTitle">Product Title <span style="color: var(--accent-rose);">*</span></label>
-            <input type="text" id="prodTitle" class="form-input" placeholder="e.g. Classic Oversized Heavyweight Tee" required maxlength="150">
-          </div>
-
-          <!-- 2. Price & Category -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div class="form-group">
-              <label for="prodPrice">Price ($ or ₱) <span style="color: var(--accent-rose);">*</span></label>
-              <input type="number" id="prodPrice" class="form-input" placeholder="49.99" step="0.01" min="0" required>
-            </div>
-            <div class="form-group">
-              <label for="prodCategory">Shop Category</label>
-              <select id="prodCategory" class="form-input">
-                <option value="">No Category (General)</option>
-                <!-- Populated dynamically from public.categories -->
-              </select>
-            </div>
-          </div>
-
-          <!-- 3. Garment Type & Target Gender -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div class="form-group">
-              <label for="prodGarmentType">Garment Type (for VTON) <span style="color: var(--accent-rose);">*</span></label>
-              <select id="prodGarmentType" class="form-input" required>
-                <option value="tops">Tops & Shirts</option>
-                <option value="bottoms">Bottoms & Pants</option>
-                <option value="one-pieces">One-Pieces & Dresses</option>
-                <option value="outerwear">Outerwear & Jackets</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="prodGender">Target Gender <span style="color: var(--accent-rose);">*</span></label>
-              <select id="prodGender" class="form-input" required>
-                <option value="unisex">Unisex</option>
-                <option value="male">Men / Male</option>
-                <option value="female">Women / Female</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- 4. Description -->
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: baseline;">
-              <label for="prodDescription">Product Description</label>
-              <span id="prodDescCounter" style="font-size: 0.72rem; color: var(--text-muted);">0 / 500</span>
-            </div>
-            <textarea id="prodDescription" class="form-input" rows="3" maxlength="500" placeholder="Fabric composition, fit notes, styling details..." oninput="updateProdDescCounter()"></textarea>
-          </div>
-
-          <!-- 5. Garment Photo Upload & URL -->
-          <div class="form-group">
-            <label>Garment Photo</label>
-            <input type="file" id="prodImageInput" accept="image/png,image/jpeg,image/webp" hidden onchange="handleProductImageChosen(event)">
-            <div class="upload-dropzone" id="prodDropzone" onclick="document.getElementById('prodImageInput').click()" ondragover="event.preventDefault(); this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleProductImageDrop(event)">
-              <div class="dropzone-empty" id="prodDropzoneEmpty">
-                <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.6rem; color: var(--accent-cyan); margin-bottom: 8px;"></i>
-                <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Drop garment image here, or <span style="color: var(--accent-cyan); text-decoration: underline;">browse</span></div>
-                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">PNG, JPG or WebP (max 4 MB)</div>
+          <div class="product-modal-columns">
+            <!-- Left Column: Product Details -->
+            <div class="product-col-details">
+              <!-- 1. Product Title -->
+              <div class="form-group">
+                <label for="prodTitle">Product Title <span style="color: var(--accent-rose);">*</span></label>
+                <input type="text" id="prodTitle" class="form-input" placeholder="e.g. Classic Oversized Heavyweight Tee" required maxlength="150">
               </div>
-              <div class="dropzone-preview" id="prodDropzonePreview" style="display: none;">
-                <img id="prodImagePreviewImg" src="" alt="Product preview">
-                <div class="preview-overlay">
-                  <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.35);" onclick="removeProductImage(event)"><i class="fa-solid fa-trash"></i> Remove</button>
+
+              <!-- 2. Price & Category -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label for="prodPrice">Price ($ or ₱) <span style="color: var(--accent-rose);">*</span></label>
+                  <input type="number" id="prodPrice" class="form-input" placeholder="49.99" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                  <label for="prodCategory">Shop Category</label>
+                  <select id="prodCategory" class="form-input">
+                    <option value="">No Category (General)</option>
+                    <!-- Populated dynamically from public.categories -->
+                  </select>
+                </div>
+              </div>
+
+              <!-- 3. Garment Type & Target Gender -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label for="prodGarmentType">Garment Type (for VTON) <span style="color: var(--accent-rose);">*</span></label>
+                  <select id="prodGarmentType" class="form-input" required>
+                    <option value="tops">Tops & Shirts</option>
+                    <option value="bottoms">Bottoms & Pants</option>
+                    <option value="one-pieces">One-Pieces & Dresses</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="prodGender">Target Gender <span style="color: var(--accent-rose);">*</span></label>
+                  <select id="prodGender" class="form-input" required>
+                    <option value="unisex">Unisex</option>
+                    <option value="male">Men / Male</option>
+                    <option value="female">Women / Female</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 4. Description -->
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <label for="prodDescription">Product Description</label>
+                  <span id="prodDescCounter" style="font-size: 0.72rem; color: var(--text-muted);">0 / 500</span>
+                </div>
+                <textarea id="prodDescription" class="form-input" rows="3" maxlength="500" placeholder="Fabric composition, fit notes, styling details..." oninput="updateProdDescCounter()"></textarea>
+              </div>
+
+              <!-- 5. Storefront Visibility -->
+              <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(15, 21, 35, 0.4); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-top: 2px;">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.82rem; color: #fff;">Publish to Storefront</div>
+                  <div style="font-size: 0.70rem; color: var(--text-muted);">Active garments are immediately visible to shoppers for try-on.</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="prodIsActive" checked>
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Right Column: Compact Garment Photo Upload & URL -->
+            <div class="product-col-photo">
+              <div class="form-group">
+                <label>Garment Photo</label>
+                <input type="file" id="prodImageInput" accept="image/png,image/jpeg,image/webp" hidden onchange="handleProductImageChosen(event)">
+                <div class="upload-dropzone prod-compact-dropzone" id="prodDropzone" onclick="document.getElementById('prodImageInput').click()" ondragover="event.preventDefault(); this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleProductImageDrop(event)">
+                  <div class="dropzone-empty" id="prodDropzoneEmpty">
+                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.5rem; color: var(--accent-cyan); margin-bottom: 6px;"></i>
+                    <div style="font-weight: 600; font-size: 0.82rem; color: #fff;">Drop garment image here, or <span style="color: var(--accent-cyan); text-decoration: underline;">browse</span></div>
+                    <div style="font-size: 0.70rem; color: var(--text-muted); margin-top: 3px;">PNG, JPG or WebP (max 4 MB)</div>
+                  </div>
+                  <div class="dropzone-preview prod-compact-preview" id="prodDropzonePreview" style="display: none;">
+                    <img id="prodImagePreviewImg" src="" alt="Product preview">
+                    <div class="preview-overlay">
+                      <button type="button" class="btn btn-outline btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.35); background: rgba(15,21,35,0.85); backdrop-filter: blur(4px);" onclick="removeProductImage(event)"><i class="fa-solid fa-trash"></i> Remove</button>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 0.73rem; color: var(--text-muted); white-space: nowrap;">or Image URL:</span>
+                  <input type="url" id="prodImageUrl" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 0.78rem;" placeholder="https://images.unsplash.com/..." oninput="handleProductImageUrlInput(this.value)">
                 </div>
               </div>
             </div>
-            <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">or Image URL:</span>
-              <input type="url" id="prodImageUrl" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 0.78rem;" placeholder="https://images.unsplash.com/..." oninput="handleProductImageUrlInput(this.value)">
-            </div>
-          </div>
-
-          <!-- 6. Storefront Visibility -->
-          <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(15, 21, 35, 0.4); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-top: 6px;">
-            <div>
-              <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Publish to Storefront</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">When active, customers can see and try on this garment in your mobile storefront.</div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="prodIsActive" checked>
-              <span class="slider round"></span>
-            </label>
           </div>
         </div>
         <div class="modal-footer">
