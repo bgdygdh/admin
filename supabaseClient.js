@@ -310,19 +310,41 @@ window.db = {
     }
   },
 
-  // 6. Update shop VTON status in Supabase
+  // 6. Update shop VTON status in Supabase (verifies a row was really changed)
   async updateVtonStatus(shopId, enabled) {
-    if (!supabaseClient) return { success: true, offline: true };
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
     try {
       const { data, error } = await supabaseClient
         .from('shops')
         .update({ vton_enabled: enabled })
-        .eq('id', shopId);
+        .eq('id', shopId)
+        .select('id, vton_enabled');
       if (error) throw error;
-      return { success: true, data };
+      // An UPDATE blocked by RLS (or a wrong id) returns no error but zero rows
+      if (!data || data.length === 0) {
+        return { success: false, error: 'The shop was not updated (not found or not permitted).' };
+      }
+      return { success: true, data: data[0] };
     } catch (err) {
       console.warn('Could not update Supabase shops table:', err.message);
       return { success: false, error: err.message };
+    }
+  },
+
+  // 6b. Read the live state of a single shop (source of truth for the owner dashboard)
+  async fetchShopState(shopId) {
+    if (!supabaseClient) return null;
+    try {
+      const { data, error } = await supabaseClient
+        .from('shops')
+        .select('id, name, store_code, description, vton_enabled, is_active')
+        .eq('id', shopId)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    } catch (err) {
+      console.warn('Could not read shop state:', err.message);
+      return null;
     }
   },
 

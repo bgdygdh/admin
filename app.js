@@ -310,21 +310,23 @@ async function handleLogin(e) {
     };
 
     if (res.shop) {
-      // Add or update shop in local list
+      // Map shop cleanly and store accurately
+      const mappedShop = {
+        id: res.shop.id,
+        name: res.shop.name,
+        code: (res.shop.store_code || '').toLowerCase(),
+        ownerName: res.profile.full_name,
+        ownerEmail: res.profile.email,
+        category: res.shop.description ? res.shop.description.replace(' merchant store.', '') : 'Fashion & Apparel',
+        vton_enabled: res.shop.vton_enabled === true,
+        is_active: res.shop.is_active !== false
+      };
+
       const existingIdx = shops.findIndex(s => s.id === res.shop.id);
       if (existingIdx !== -1) {
-        shops[existingIdx] = { ...shops[existingIdx], ...res.shop };
+        shops[existingIdx] = mappedShop;
       } else {
-        shops.push({
-          id: res.shop.id,
-          name: res.shop.name,
-          code: res.shop.store_code,
-          ownerName: res.profile.full_name,
-          ownerEmail: res.profile.email,
-          category: res.shop.description || 'Fashion Store',
-          vton_enabled: res.shop.vton_enabled === true,
-          is_active: res.shop.is_active !== false
-        });
+        shops.push(mappedShop);
       }
       localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
     }
@@ -363,14 +365,48 @@ async function handleLogout() {
     await window.db.logout();
   }
   isLoggedIn = false;
+  currentUser = { email: '', name: '', role: '', shopId: null };
   localStorage.removeItem('antigravity_admin_auth');
+  localStorage.removeItem('antigravity_current_user');
   resetCategoriesState();
+  isDownloading = false;
   document.getElementById('authWrapper').classList.remove('hidden');
   showToast('Logged out of session.', 'info');
 }
 
 function getCurrentShop() {
-  return shops.find(s => s.id === currentUser.shopId) || shops[0];
+  const own = shops.find(s => s.id === currentUser.shopId);
+  if (own) return own;
+  // A store owner must never be handed another merchant's shop
+  if (currentUser.role === 'owner') {
+    return { id: null, name: 'Your Store', code: '', ownerName: currentUser.name || '', ownerEmail: currentUser.email || '', category: '', vton_enabled: false, is_active: true };
+  }
+  return shops[0];
+}
+
+// Pull the signed-in owner's live shop row (VTON flag, name, code) from Supabase
+async function refreshOwnShopFromDb() {
+  if (currentUser.role !== 'owner' || !UUID_RE.test(currentUser.shopId || '')) return;
+  if (!window.db || !window.db.fetchShopState) return;
+
+  const requestedShopId = currentUser.shopId;
+  const live = await window.db.fetchShopState(requestedShopId);
+  if (!live || currentUser.shopId !== requestedShopId) return; // missing, or a different user signed in meanwhile
+
+  const idx = shops.findIndex(s => s.id === live.id);
+  const merged = {
+    ...(idx !== -1 ? shops[idx] : { ownerName: currentUser.name, ownerEmail: currentUser.email }),
+    id: live.id,
+    name: live.name,
+    code: (live.store_code || '').toLowerCase(),
+    category: live.description ? live.description.replace(' merchant store.', '') : 'Fashion & Apparel',
+    vton_enabled: live.vton_enabled === true,
+    is_active: live.is_active !== false
+  };
+  if (idx !== -1) shops[idx] = merged; else shops.push(merged);
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
+  updatePluginStateUI();
 }
 
 // =============================================================================
@@ -436,6 +472,10 @@ function applyRoleNavigation() {
     // Load this shop's categories (sidebar badge + Categories tab)
     loadCategories();
 
+    // Re-render the VTON plugin widget for THIS shop, then confirm it against the database
+    updatePluginStateUI();
+    refreshOwnShopFromDb();
+
     switchTab('dashboard');
   }
 }
@@ -474,6 +514,11 @@ function switchTab(tabName) {
   // Refresh this shop's categories whenever the tab is opened
   if (tabName === 'categories') {
     loadCategories(true);
+  }
+
+  // Re-check the plugin state against the database when opening Settings
+  if (tabName === 'settings') {
+    refreshOwnShopFromDb();
   }
 }
 
@@ -811,13 +856,20 @@ async function handleSuperRegisterShop(e) {
 async function toggleShopVton(shopId) {
   const s = shops.find(item => item.id === shopId);
   if (!s) return;
-  s.vton_enabled = !s.vton_enabled;
-  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  const previous = s.vton_enabled === true;
+  const next = !previous;
 
   if (window.db && window.db.updateVtonStatus) {
-    await window.db.updateVtonStatus(shopId, s.vton_enabled);
+    const res = await window.db.updateVtonStatus(shopId, next);
+    if (!res.success) {
+      showToast(`Could not update Virtual Try-On: ${escapeHtml(res.error)}`, 'error');
+      return;
+    }
   }
-  showToast(`Updated Virtual Try-On for ${s.name}: ${s.vton_enabled ? 'Active' : 'Disabled'}`, 'info');
+
+  s.vton_enabled = next;
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  showToast(`Updated Virtual Try-On for ${escapeHtml(s.name)}: ${s.vton_enabled ? 'Active' : 'Disabled'}`, 'info');
   renderSuperShops();
 }
 
@@ -886,12 +938,18 @@ function triggerPluginDownloadAnimation() {
 async function finishDownloadAnimation() {
   isDownloading = false;
   const shop = getCurrentShop();
-  shop.vton_enabled = true;
-  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
   if (window.db && window.db.updateVtonStatus) {
-    await window.db.updateVtonStatus(shop.id, true);
+    const res = await window.db.updateVtonStatus(shop.id, true);
+    if (!res.success) {
+      showToast(`Could not activate VTON: ${escapeHtml(res.error)}`, 'error');
+      updatePluginStateUI();
+      return;
+    }
   }
+
+  shop.vton_enabled = true;
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
   showToast('🎉 Body Measurement & Virtual Try-On Plugin is now ACTIVE on Mobile!', 'success');
   updatePluginStateUI();
@@ -901,12 +959,17 @@ async function finishDownloadAnimation() {
 async function deactivatePlugin() {
   if (confirm('Are you sure you want to disable Virtual Try-On? Shoppers on your mobile app will no longer see the Try-On button.')) {
     const shop = getCurrentShop();
-    shop.vton_enabled = false;
-    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     if (window.db && window.db.updateVtonStatus) {
-      await window.db.updateVtonStatus(shop.id, false);
+      const res = await window.db.updateVtonStatus(shop.id, false);
+      if (!res.success) {
+        showToast(`Could not disable VTON: ${escapeHtml(res.error)}`, 'error');
+        return;
+      }
     }
+
+    shop.vton_enabled = false;
+    localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     showToast('Virtual Try-On plugin disabled.', 'info');
     updatePluginStateUI();
@@ -1656,7 +1719,7 @@ function saveStoreSettings(e) {
   e.preventDefault();
   const shop = getCurrentShop();
   shop.name = document.getElementById('settingStoreName').value.trim();
-  shop.code = document.getElementById('settingStoreCode').value.trim().toUpperCase();
+  shop.code = document.getElementById('settingStoreCode').value.trim().toLowerCase();
   shop.ownerEmail = document.getElementById('settingStoreEmail').value.trim();
 
   localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
