@@ -38,64 +38,12 @@ let categoriesLoading = false;
 let categoriesError = null;
 let categoryFilter = 'active';    // 'active' | 'archived' | 'all'
 
-// Dummy Orders
-let orders = JSON.parse(localStorage.getItem('antigravity_admin_orders')) || [
-  {
-    id: 'ORD-9842',
-    customer: 'Juan Dela Cruz',
-    date: 'Today, 2:45 PM',
-    item: 'Slim-Fit Oxford Button-Down Shirt',
-    size: 'Size M',
-    vtonRecommended: true,
-    total: 58.00,
-    payment: 'Credit Card',
-    status: 'Delivered'
-  },
-  {
-    id: 'ORD-9841',
-    customer: 'Maria Santos',
-    date: 'Today, 11:20 AM',
-    item: 'Floral Tiered Midi Summer Dress',
-    size: 'Size S',
-    vtonRecommended: true,
-    total: 89.00,
-    payment: 'GCash',
-    status: 'Processing'
-  },
-  {
-    id: 'ORD-9840',
-    customer: 'Liam Walker',
-    date: 'Yesterday, 6:15 PM',
-    item: 'Minimalist Heavyweight Zip Hoodie',
-    size: 'Size L',
-    vtonRecommended: true,
-    total: 95.00,
-    payment: 'Maya',
-    status: 'Shipped'
-  },
-  {
-    id: 'ORD-9839',
-    customer: 'Sophia Reyes',
-    date: 'Oct 15, 2026',
-    item: 'High-Rise Straight Leg Denim Jeans',
-    size: 'Size M',
-    vtonRecommended: true,
-    total: 79.50,
-    payment: 'COD',
-    status: 'Processing'
-  },
-  {
-    id: 'ORD-9838',
-    customer: 'Miguel Tan',
-    date: 'Oct 14, 2026',
-    item: 'Classic Oversized Heavyweight Tee',
-    size: 'Size XL',
-    vtonRecommended: false,
-    total: 34.99,
-    payment: 'Credit Card',
-    status: 'Delivered'
-  }
-];
+// Orders (live from Supabase public.orders + order_line_items, scoped to the owner's shop)
+let orders = [];
+let ordersShopId = null;
+let ordersLoaded = false;
+let ordersLoading = false;
+let ordersError = null;
 
 const liveFeedData = [
   { icon: 'fa-user-check', color: '#10b981', title: 'Fit Recommended: Size M', time: '2m ago', desc: 'Customer scanned Bench Slim Shirt (Confidence 98%)' },
@@ -293,6 +241,7 @@ async function handleLogout() {
   localStorage.removeItem('antigravity_current_user');
   resetCategoriesState();
   resetProductsState();
+  resetOrdersState();
   isDownloading = false;
   document.getElementById('authWrapper').classList.remove('hidden');
   showToast('Logged out of session.', 'info');
@@ -393,9 +342,10 @@ function applyRoleNavigation() {
     if (codeInput) codeInput.value = shop.code;
     if (emailInput) emailInput.value = shop.ownerEmail;
 
-    // Load this shop's categories and products (sidebar badges + tabs)
+    // Load this shop's categories, products, and live orders (sidebar badges + tabs)
     loadCategories();
     loadProducts();
+    loadOrders();
 
     // Re-render the VTON plugin widget for THIS shop, then confirm it against the database
     updatePluginStateUI();
@@ -444,6 +394,11 @@ function switchTab(tabName) {
   // Refresh this shop's categories whenever the tab is opened
   if (tabName === 'categories') {
     loadCategories(true);
+  }
+
+  // Refresh this shop's live orders whenever Dashboard or Orders is opened
+  if (tabName === 'orders' || tabName === 'dashboard') {
+    loadOrders(true);
   }
 
   // Re-check the plugin state against the database when opening Settings
@@ -1913,56 +1868,270 @@ async function toggleCategoryArchive(categoryId) {
   await loadCategories(true);
 }
 
+function resetOrdersState() {
+  orders = [];
+  ordersShopId = null;
+  ordersLoaded = false;
+  ordersLoading = false;
+  ordersError = null;
+  renderOrders();
+  renderStats();
+}
+
+async function loadOrders(force = false) {
+  const shopId = getOwnerShopId();
+
+  if (!shopId) {
+    orders = [];
+    ordersShopId = null;
+    ordersLoaded = true;
+    ordersLoading = false;
+    ordersError = null;
+    renderOrders();
+    renderStats();
+    return;
+  }
+
+  if (ordersShopId !== shopId) {
+    orders = [];
+    ordersLoaded = false;
+    ordersError = null;
+    ordersShopId = shopId;
+  }
+
+  if (ordersLoading) return;
+  if (ordersLoaded && !force) {
+    renderOrders();
+    renderStats();
+    return;
+  }
+
+  ordersLoading = true;
+  ordersError = null;
+  renderOrders();
+
+  const res = window.db && window.db.fetchOrders
+    ? await window.db.fetchOrders(shopId)
+    : { success: false, error: 'Database client not available.' };
+  ordersLoading = false;
+
+  // Discard stale result if user signed out or shop changed while fetching
+  if (getOwnerShopId() !== shopId) return;
+
+  if (res.success) {
+    orders = res.orders || [];
+    ordersLoaded = true;
+    ordersError = null;
+  } else {
+    ordersError = res.error || 'Failed to load orders.';
+  }
+  renderOrders();
+  renderStats();
+}
+
+function formatOrderDate(dateString) {
+  if (!dateString) return '—';
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function getOrderStatusMeta(status) {
+  const normalized = String(status || 'pending').toLowerCase();
+  const map = {
+    pending: { label: 'Pending', badgeClass: 'badge-amber' },
+    processing: { label: 'Processing', badgeClass: 'badge-indigo' },
+    shipped: { label: 'Shipped', badgeClass: 'badge-cyan' },
+    delivered: { label: 'Delivered', badgeClass: 'badge-emerald' },
+    cancelled: { label: 'Cancelled', badgeClass: 'badge-rose' }
+  };
+  return map[normalized] || {
+    label: normalized.charAt(0).toUpperCase() + normalized.slice(1),
+    badgeClass: 'badge-amber'
+  };
+}
+
+function getOrderSummary(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (items.length === 0) {
+    return {
+      titleText: 'Order items unavailable',
+      sizeText: '—',
+      totalQty: 0,
+      hasVton: false
+    };
+  }
+  const first = items[0];
+  const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 1), 0);
+  const titleText = items.length > 1
+    ? `${first.product_title} (+${items.length - 1} more)`
+    : first.product_title;
+  const sizeText = items.length > 1
+    ? `${first.selected_size} · ${totalQty} items`
+    : `Size ${first.selected_size}${first.quantity > 1 ? ` × ${first.quantity}` : ''}`;
+  const hasVton = items.some(i => i.recommended_by_vton === true);
+  return { titleText, sizeText, totalQty, hasVton };
+}
+
 function renderOrders() {
   const tbody = document.getElementById('allOrdersTbody');
   const recentTbody = document.getElementById('recentOrdersTbody');
   if (!tbody) return;
 
-  const searchVal = (document.getElementById('orderSearchInput')?.value || '').toLowerCase();
-  const statusFilter = document.getElementById('orderStatusFilter')?.value || 'all';
-
-  const filtered = orders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(searchVal) || o.customer.toLowerCase().includes(searchVal);
-    const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
   const countBadge = document.getElementById('sidebarOrderCount');
   if (countBadge) countBadge.textContent = orders.length;
 
-  const renderRow = (o, isRecent = false) => `
+  const shopId = getOwnerShopId();
+  if (!shopId) {
+    const noShopHtml = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+          No shop is linked to this account yet.
+        </td>
+      </tr>`;
+    tbody.innerHTML = noShopHtml;
+    if (recentTbody) {
+      recentTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 28px 16px; color: var(--text-muted);">No shop linked.</td></tr>`;
+    }
+    return;
+  }
+
+  if (ordersLoading && !ordersLoaded) {
+    const loadingHtml = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+          <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px; color: var(--accent-cyan);"></i>
+          Loading shop orders from Supabase...
+        </td>
+      </tr>`;
+    tbody.innerHTML = loadingHtml;
+    if (recentTbody) {
+      recentTbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+            <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px; color: var(--accent-cyan);"></i>
+            Loading recent orders...
+          </td>
+        </tr>`;
+    }
+    return;
+  }
+
+  if (ordersError && !ordersLoaded) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.6rem; color: var(--accent-rose); margin-bottom: 10px; display: block;"></i>
+          <strong>Couldn't load orders</strong>
+          <div style="font-size: 0.8rem; margin: 6px 0 14px;">${escapeHtml(ordersError)}</div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="loadOrders(true)"><i class="fa-solid fa-arrows-rotate"></i> Try again</button>
+        </td>
+      </tr>`;
+    if (recentTbody) {
+      recentTbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 28px 16px; color: var(--text-muted);">
+            ${escapeHtml(ordersError)}
+          </td>
+        </tr>`;
+    }
+    return;
+  }
+
+  const searchVal = (document.getElementById('orderSearchInput')?.value || '').toLowerCase().trim();
+  const statusFilter = (document.getElementById('orderStatusFilter')?.value || 'all').toLowerCase();
+
+  const filtered = orders.filter(o => {
+    const itemsText = (o.items || []).map(i => i.product_title || '').join(' ').toLowerCase();
+    const matchesSearch = !searchVal ||
+      String(o.order_number || '').toLowerCase().includes(searchVal) ||
+      String(o.customer_name || '').toLowerCase().includes(searchVal) ||
+      String(o.customer_email || '').toLowerCase().includes(searchVal) ||
+      itemsText.includes(searchVal);
+    const matchesStatus = statusFilter === 'all' || String(o.status || 'pending').toLowerCase() === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const renderRow = (o, isRecent = false) => {
+    const summary = getOrderSummary(o);
+    const statusMeta = getOrderStatusMeta(o.status);
+    const displayNum = escapeHtml(o.order_number || o.id);
+    const customerName = escapeHtml(o.customer_name || 'Guest Customer');
+    const customerSub = o.customer_email ? `<div style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(o.customer_email)}</div>` : '';
+    const dateText = escapeHtml(formatOrderDate(o.created_at));
+    const totalFormatted = `₱${Number(o.total_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    return `
     <tr>
-      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">${o.id}</span></td>
-      <td><strong>${o.customer}</strong></td>
-      ${!isRecent ? `<td><span style="color: var(--text-muted); font-size: 0.8rem;">${o.date}</span></td>` : ''}
+      <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">#${displayNum}</span></td>
       <td>
-        <div style="font-weight: 600;">${o.item}</div>
+        <strong>${customerName}</strong>
+        ${!isRecent ? customerSub : ''}
+      </td>
+      ${!isRecent ? `<td><span style="color: var(--text-muted); font-size: 0.8rem;">${dateText}</span></td>` : ''}
+      <td>
+        <div style="font-weight: 600;">${escapeHtml(summary.titleText)}</div>
         <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-          <span>${o.size}</span>
-          ${o.vtonRecommended ? `<span class="badge badge-emerald" style="padding: 2px 6px; font-size: 0.65rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Match</span>` : ''}
+          <span>${escapeHtml(summary.sizeText)}</span>
+          ${summary.hasVton ? `<span class="badge badge-emerald" style="padding: 2px 6px; font-size: 0.65rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Match</span>` : ''}
         </div>
       </td>
-      ${isRecent ? `<td><span class="badge ${o.vtonRecommended ? 'badge-emerald' : 'badge-indigo'}">${o.size}</span></td>` : ''}
-      <td><strong style="font-family: var(--font-mono);">$${o.total.toFixed(2)}</strong></td>
-      ${!isRecent ? `<td><span style="font-size: 0.8rem; color: var(--text-muted);">${o.payment}</span></td>` : ''}
+      ${isRecent ? `<td><span class="badge ${summary.hasVton ? 'badge-emerald' : 'badge-indigo'}">${escapeHtml(summary.sizeText)}</span></td>` : ''}
+      <td><strong style="font-family: var(--font-mono);">${totalFormatted}</strong></td>
+      ${!isRecent ? `<td><span style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(o.payment_method || 'COD')}</span></td>` : ''}
       <td>
-        <span class="badge ${o.status === 'Delivered' ? 'badge-emerald' : (o.status === 'Shipped' ? 'badge-cyan' : 'badge-amber')}">
-          ${o.status}
+        <span class="badge badge-nowrap ${statusMeta.badgeClass}">
+          ${escapeHtml(statusMeta.label)}
         </span>
       </td>
       ${!isRecent ? `
         <td>
-          <button class="btn btn-outline btn-sm" onclick="viewOrderDetails('${o.id}')">
+          <button type="button" class="btn btn-outline btn-sm" onclick="viewOrderDetails('${escapeHtml(o.id)}')">
             <i class="fa-solid fa-eye"></i> Details
           </button>
         </td>
       ` : ''}
     </tr>
   `;
+  };
 
-  tbody.innerHTML = filtered.map(o => renderRow(o, false)).join('');
+  if (filtered.length === 0) {
+    const isFiltering = searchVal !== '' || statusFilter !== 'all';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+          <i class="fa-solid fa-bag-shopping" style="font-size: 2rem; color: var(--text-dim); margin-bottom: 10px; display: block;"></i>
+          <strong>${isFiltering ? 'No orders match your search or filter' : 'No orders placed in this shop yet'}</strong>
+          <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">
+            ${isFiltering ? 'Try clearing the search box or switching the status filter.' : 'Customer purchases made from your storefront app will appear here automatically.'}
+          </div>
+        </td>
+      </tr>`;
+  } else {
+    tbody.innerHTML = filtered.map(o => renderRow(o, false)).join('');
+  }
+
   if (recentTbody) {
-    recentTbody.innerHTML = orders.slice(0, 4).map(o => renderRow(o, true)).join('');
+    if (orders.length === 0) {
+      recentTbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+            No orders placed in this shop yet.
+          </td>
+        </tr>`;
+    } else {
+      recentTbody.innerHTML = orders.slice(0, 5).map(o => renderRow(o, true)).join('');
+    }
   }
 }
 
@@ -1970,28 +2139,102 @@ function filterOrders() {
   renderOrders();
 }
 
+async function handleOrderStatusChange(orderId, newStatus) {
+  const shopId = getOwnerShopId();
+  if (!shopId || !window.db || !window.db.updateOrderStatus) return;
+
+  const res = await window.db.updateOrderStatus(shopId, orderId, newStatus);
+  if (!res.success) {
+    showToast(escapeHtml(res.error || 'Could not update order status.'), 'error');
+    // Re-open modal state to reset select to persisted value
+    viewOrderDetails(orderId);
+    return;
+  }
+
+  const order = orders.find(item => item.id === orderId);
+  if (order) {
+    order.status = String(newStatus).toLowerCase();
+  }
+  renderOrders();
+  renderStats();
+  viewOrderDetails(orderId);
+  showToast(`Order status updated to ${getOrderStatusMeta(newStatus).label}.`, 'success');
+}
+
 function viewOrderDetails(orderId) {
   const o = orders.find(item => item.id === orderId);
   if (!o) return;
 
-  document.getElementById('orderModalTitle').textContent = `Order Details: ${o.id}`;
+  const statusMeta = getOrderStatusMeta(o.status);
+  const currentStatus = String(o.status || 'pending').toLowerCase();
+  const totalFormatted = `₱${Number(o.total_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const items = Array.isArray(o.items) ? o.items : [];
+
+  const itemsHtml = items.length > 0
+    ? items.map(li => `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(15, 21, 35, 0.5); border: 1px solid var(--border-subtle);">
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            ${li.product_image_url
+              ? `<img src="${escapeHtml(li.product_image_url)}" alt="${escapeHtml(li.product_title)}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-subtle);">`
+              : `<div style="width: 42px; height: 42px; border-radius: 6px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: var(--text-dim);"><i class="fa-solid fa-shirt"></i></div>`}
+            <div style="min-width: 0;">
+              <div style="font-weight: 600; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(li.product_title)}</div>
+              <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+                <span>Size: <strong>${escapeHtml(li.selected_size)}</strong></span>
+                <span>· Qty: ${Number(li.quantity) || 1}</span>
+                ${li.recommended_by_vton ? `<span class="badge badge-emerald" style="padding: 1px 6px; font-size: 0.65rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Match</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <strong style="font-family: var(--font-mono); font-size: 0.85rem; white-space: nowrap;">₱${(Number(li.price_at_purchase) * (Number(li.quantity) || 1)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        </div>
+      `).join('')
+    : '<div style="color: var(--text-muted); font-size: 0.84rem;">No line items recorded for this order.</div>';
+
+  document.getElementById('orderModalTitle').textContent = `Order #${o.order_number || o.id}`;
   document.getElementById('orderModalBody').innerHTML = `
     <div style="display: flex; flex-direction: column; gap: 14px;">
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Customer:</span>
-        <strong>${o.customer}</strong>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Placed On</span>
+        <span style="font-size: 0.85rem;">${escapeHtml(formatOrderDate(o.created_at))}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Garment Item:</span>
-        <span>${o.item}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Order Status</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge ${statusMeta.badgeClass}">${escapeHtml(statusMeta.label)}</span>
+          <select class="custom-select" style="padding: 4px 10px; font-size: 0.78rem;" onchange="handleOrderStatusChange('${escapeHtml(o.id)}', this.value)">
+            ${['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(st =>
+              `<option value="${st}" ${currentStatus === st ? 'selected' : ''}>${getOrderStatusMeta(st).label}</option>`
+            ).join('')}
+          </select>
+        </div>
       </div>
-      <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle);">
-        <span style="color: var(--text-muted);">Selected Size:</span>
-        <span class="badge badge-emerald"><i class="fa-solid fa-check"></i> ${o.size} (AI Body Scan Recommended)</span>
+      <div style="display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Customer</span>
+        <div style="text-align: right;">
+          <div><strong>${escapeHtml(o.customer_name || 'Guest Customer')}</strong></div>
+          ${o.customer_email ? `<div style="font-size: 0.76rem; color: var(--text-muted);">${escapeHtml(o.customer_email)}</div>` : ''}
+          ${o.contact_phone ? `<div style="font-size: 0.76rem; color: var(--text-muted);">${escapeHtml(o.contact_phone)}</div>` : ''}
+        </div>
       </div>
-      <div style="display: flex; justify-content: space-between; padding-top: 6px; font-size: 1.1rem;">
-        <span style="font-weight: 700;">Total Charged:</span>
-        <strong style="color: var(--accent-cyan); font-family: var(--font-mono);">$${o.total.toFixed(2)}</strong>
+      ${o.shipping_address ? `
+      <div style="display: flex; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+        <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">Shipping Address</span>
+        <span style="text-align: right; font-size: 0.84rem;">${escapeHtml(o.shipping_address)}</span>
+      </div>` : ''}
+      <div style="display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Payment Method</span>
+        <span style="font-size: 0.85rem;">${escapeHtml(o.payment_method || 'COD')}</span>
+      </div>
+      <div>
+        <div style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 8px; font-weight: 600;">Items Ordered (${items.length})</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${itemsHtml}
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-size: 1.08rem;">
+        <span style="font-weight: 700;">Total Charged</span>
+        <strong style="color: var(--accent-cyan); font-family: var(--font-mono);">${totalFormatted}</strong>
       </div>
     </div>
   `;
@@ -2020,11 +2263,12 @@ function renderLiveFeed() {
 }
 
 function renderStats() {
-  const totalSales = orders.reduce((sum, o) => sum + o.total, 0) + 148000;
+  const activeOrders = orders.filter(o => String(o.status || '').toLowerCase() !== 'cancelled');
+  const totalSales = activeOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
   const revElem = document.getElementById('statRevenue');
   const ordElem = document.getElementById('statOrders');
-  if (revElem) revElem.textContent = `$${totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (ordElem) ordElem.textContent = (orders.length + 1477).toLocaleString();
+  if (revElem) revElem.textContent = `₱${totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (ordElem) ordElem.textContent = orders.length.toLocaleString();
 }
 
 function saveStoreSettings(e) {

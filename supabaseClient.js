@@ -739,6 +739,80 @@ window.db = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // 10. Orders (per shop) - strictly scoped by shop_id.
+  // ---------------------------------------------------------------------------
+  async fetchOrders(shopId) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const { data, error } = await supabaseClient
+        .from('orders')
+        .select(
+          'id, order_number, shop_id, customer_id, customer_name, customer_email, contact_phone, shipping_address, total_amount, payment_method, status, created_at, ' +
+          'order_line_items(id, order_id, product_id, product_title, selected_size, price_at_purchase, quantity, product_image_url, recommended_by_vton)'
+        )
+        .eq('shop_id', shopId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const orders = (data || []).map(o => ({
+        id: o.id,
+        order_number: o.order_number || o.id,
+        shop_id: o.shop_id,
+        customer_id: o.customer_id || null,
+        customer_name: o.customer_name || 'Guest Customer',
+        customer_email: o.customer_email || '',
+        contact_phone: o.contact_phone || '',
+        shipping_address: o.shipping_address || '',
+        total_amount: Number(o.total_amount) || 0,
+        payment_method: o.payment_method || 'COD',
+        status: String(o.status || 'pending').toLowerCase(),
+        created_at: o.created_at,
+        items: Array.isArray(o.order_line_items)
+          ? o.order_line_items.map(li => ({
+              id: li.id,
+              order_id: li.order_id,
+              product_id: li.product_id || null,
+              product_title: li.product_title || 'Garment Item',
+              selected_size: li.selected_size || '-',
+              price_at_purchase: Number(li.price_at_purchase) || 0,
+              quantity: Number(li.quantity) || 1,
+              product_image_url: li.product_image_url || null,
+              recommended_by_vton: li.recommended_by_vton === true
+            }))
+          : []
+      }));
+
+      return { success: true, orders };
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      return { success: false, error: (err && err.message) || 'Failed to load orders.' };
+    }
+  },
+
+  async updateOrderStatus(shopId, orderId, status) {
+    if (!supabaseClient) return { success: false, error: 'Database client not connected.' };
+    try {
+      const normalizedStatus = String(status || 'pending').trim().toLowerCase();
+      const { data, error } = await supabaseClient
+        .from('orders')
+        .update({ status: normalizedStatus })
+        .eq('id', orderId)
+        .eq('shop_id', shopId)
+        .select('id, status');
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { success: false, error: 'Order was not updated (not found or blocked by RLS policy).' };
+      }
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error('Error updating order status:', err);
+      return { success: false, error: (err && err.message) || 'Failed to update order status.' };
+    }
+  },
+
   async logout() {
     if (supabaseClient) {
       await supabaseClient.auth.signOut();

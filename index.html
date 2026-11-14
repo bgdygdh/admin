@@ -109,7 +109,7 @@
       <a class="nav-item" onclick="switchTab('orders')">
         <i class="fa-solid fa-bag-shopping"></i>
         <span>Orders</span>
-        <span class="nav-badge" id="sidebarOrderCount">5</span>
+        <span class="nav-badge" id="sidebarOrderCount">0</span>
       </a>
 
       <div class="nav-section-label">System</div>
@@ -308,12 +308,12 @@
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-title">Total Revenue</span>
-              <div class="stat-icon emerald"><i class="fa-solid fa-dollar-sign"></i></div>
+              <div class="stat-icon emerald"><i class="fa-solid fa-peso-sign"></i></div>
             </div>
-            <div class="stat-value" id="statRevenue">$148,920.00</div>
+            <div class="stat-value" id="statRevenue">₱0.00</div>
             <div class="stat-trend">
-              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +16.4%</span>
-              <span>vs last month</span>
+              <span class="trend-up"><i class="fa-solid fa-database"></i> Live</span>
+              <span>from shop orders</span>
             </div>
           </div>
 
@@ -322,10 +322,10 @@
               <span class="stat-title">Total Orders</span>
               <div class="stat-icon indigo"><i class="fa-solid fa-cart-shopping"></i></div>
             </div>
-            <div class="stat-value" id="statOrders">1,482</div>
+            <div class="stat-value" id="statOrders">0</div>
             <div class="stat-trend">
-              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +12.1%</span>
-              <span>completed</span>
+              <span class="trend-up"><i class="fa-solid fa-bag-shopping"></i> Shop total</span>
+              <span>orders placed</span>
             </div>
           </div>
 
@@ -528,10 +528,15 @@
           <div class="filter-group">
             <select id="orderStatusFilter" class="custom-select" onchange="filterOrders()">
               <option value="all">All Statuses</option>
-              <option value="Processing">Processing</option>
-              <option value="Shipped">Shipped</option>
-              <option value="Delivered">Delivered</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
             </select>
+            <button type="button" class="btn btn-outline" onclick="loadOrders(true)" title="Refresh live orders">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
           </div>
         </div>
 
@@ -980,7 +985,7 @@
        5. JavaScript Execution
        ========================================================================= -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabaseClient.js?v=1.1.0"></script>
-  <script src="app.js?v=1.1.0"></script>
+  <script src="supabaseClient.js?v=1.2.0"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>
