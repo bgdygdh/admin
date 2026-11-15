@@ -47,7 +47,7 @@ let ordersError = null;
 
 const liveFeedData = [
   { icon: 'fa-user-check', color: '#10b981', title: 'Fit Recommended: Size M', time: '2m ago', desc: 'Customer scanned Bench Slim Shirt (Confidence 98%)' },
-  { icon: 'fa-camera-retro', color: '#06b6d4', title: 'Virtual Try-On Rendered', time: '6m ago', desc: 'Fashn AI generated preview for Floral Midi Dress' },
+  { icon: 'fa-camera-retro', color: '#06b6d4', title: 'Virtual Try-On Rendered', time: '6m ago', desc: 'AI Virtual Try-On generated preview for Floral Midi Dress' },
   { icon: 'fa-bag-shopping', color: '#6366f1', title: 'Item Added to Cart', time: '14m ago', desc: 'Added Size L Heavyweight Hoodie (VTON Verified)' },
   { icon: 'fa-ruler-combined', color: '#f59e0b', title: 'Body Scan Complete', time: '22m ago', desc: 'Extracted Chest 38in, Waist 32in, Inseam 30in' }
 ];
@@ -113,10 +113,236 @@ function showToast(message, type = 'info') {
 function initAuthUI() {
   const authWrapper = document.getElementById('authWrapper');
   if (isLoggedIn) {
-    authWrapper.classList.add('hidden');
+    document.body.classList.add('portal-authenticated');
+    if (authWrapper) authWrapper.classList.add('hidden');
   } else {
-    authWrapper.classList.remove('hidden');
+    document.body.classList.remove('portal-authenticated');
+    if (authWrapper) authWrapper.classList.add('hidden');
   }
+}
+
+function openAuthPortal(prefillEmail = '', prefillPassword = '') {
+  const authWrapper = document.getElementById('authWrapper');
+  const emailInput = document.getElementById('loginId');
+  const passInput = document.getElementById('loginPassword');
+  if (prefillEmail && emailInput) emailInput.value = prefillEmail;
+  if (prefillPassword && passInput) passInput.value = prefillPassword;
+  if (authWrapper) authWrapper.classList.remove('hidden');
+}
+
+function closeAuthPortal() {
+  const authWrapper = document.getElementById('authWrapper');
+  if (authWrapper) authWrapper.classList.add('hidden');
+}
+
+function copyCodeSnippet(elementId, buttonEl) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const text = el.textContent || '';
+  const markCopied = () => {
+    if (buttonEl) {
+      const original = buttonEl.innerHTML;
+      buttonEl.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+      setTimeout(() => {
+        buttonEl.innerHTML = original;
+      }, 1800);
+    }
+    showToast('Code snippet copied to clipboard.', 'success');
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(markCopied).catch(() => {
+      fallbackCopyText(text);
+      markCopied();
+    });
+  } else {
+    fallbackCopyText(text);
+    markCopied();
+  }
+}
+
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (_) {}
+  document.body.removeChild(ta);
+}
+
+// =============================================================================
+// 3b. Public "Apply Now" Merchant Application + Hidden 5s Auto-Accept
+// =============================================================================
+
+let pendingAutoAcceptTimer = null;
+let lastSubmittedApplication = null;
+
+function autoGenerateApplyStoreCode(name) {
+  const codeInput = document.getElementById('applyShopCode');
+  if (!codeInput) return;
+  codeInput.value = String(name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function openApplyMerchantModal() {
+  if (pendingAutoAcceptTimer) {
+    clearTimeout(pendingAutoAcceptTimer);
+    pendingAutoAcceptTimer = null;
+  }
+  const form = document.getElementById('applyMerchantForm');
+  if (form) form.reset();
+
+  const formStep = document.getElementById('applyFormStep');
+  const formFooter = document.getElementById('applyFormFooter');
+  const waitingStep = document.getElementById('applyWaitingStep');
+  const approvedStep = document.getElementById('applyApprovedStep');
+
+  if (formStep) formStep.style.display = 'flex';
+  if (formFooter) formFooter.style.display = 'flex';
+  if (waitingStep) waitingStep.style.display = 'none';
+  if (approvedStep) approvedStep.style.display = 'none';
+
+  const submitBtn = document.getElementById('btnSubmitApplication');
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Application';
+  }
+
+  openModal('applyMerchantModal');
+}
+
+function closeApplyMerchantModal() {
+  if (pendingAutoAcceptTimer) {
+    clearTimeout(pendingAutoAcceptTimer);
+    pendingAutoAcceptTimer = null;
+  }
+  closeModal('applyMerchantModal');
+}
+
+async function handleApplyMerchant(e) {
+  e.preventDefault();
+  const submitBtn = document.getElementById('btnSubmitApplication');
+  const name = document.getElementById('applyShopName').value.trim();
+  const code = document.getElementById('applyShopCode').value.trim().toLowerCase();
+  const category = document.getElementById('applyShopCategory').value;
+  const ownerName = document.getElementById('applyOwnerName').value.trim();
+  const ownerEmail = document.getElementById('applyOwnerEmail').value.trim();
+  const ownerPassword = document.getElementById('applyOwnerPassword').value;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting application...';
+  }
+
+  let createdShopId = `shop_${code}_${Date.now()}`;
+  let createdAuthClient = null;
+
+  if (window.db && window.db.applyMerchantShop) {
+    const res = await window.db.applyMerchantShop({
+      name,
+      code,
+      category,
+      ownerName,
+      ownerEmail,
+      ownerPassword
+    });
+
+    if (!res.success) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Application';
+      }
+      showToast(`Application failed: ${res.error}`, 'error');
+      return;
+    }
+
+    createdShopId = res.shop.id;
+    createdAuthClient = res.authClient || null;
+  }
+
+  lastSubmittedApplication = {
+    shopId: createdShopId,
+    name,
+    code,
+    category,
+    ownerName,
+    email: ownerEmail,
+    password: ownerPassword,
+    authClient: createdAuthClient
+  };
+
+  // Track pending store in local state
+  const pendingRecord = {
+    id: createdShopId,
+    name,
+    code,
+    ownerName,
+    ownerEmail,
+    category,
+    approvalStatus: 'pending',
+    vton_enabled: false,
+    is_active: false,
+    joinedDate: 'Pending'
+  };
+  shops = [pendingRecord, ...shops.filter(s => s.id !== createdShopId)];
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+
+  // Transition cleanly to the "Please Do Not Exit Screen" waiting screen (no countdown shown)
+  document.getElementById('applyFormStep').style.display = 'none';
+  document.getElementById('applyFormFooter').style.display = 'none';
+  document.getElementById('waitingStoreNameLabel').textContent = name;
+  document.getElementById('waitingStoreCodeLabel').textContent = code;
+  document.getElementById('applyWaitingStep').style.display = 'flex';
+
+  // Invisible 5-second background auto-accept while applicant stays on this screen
+  if (pendingAutoAcceptTimer) clearTimeout(pendingAutoAcceptTimer);
+  pendingAutoAcceptTimer = setTimeout(async () => {
+    pendingAutoAcceptTimer = null;
+    if (!lastSubmittedApplication || lastSubmittedApplication.shopId !== createdShopId) return;
+
+    if (window.db && window.db.approveShopApplication) {
+      const approveRes = await window.db.approveShopApplication(
+        createdShopId,
+        category,
+        createdAuthClient
+      );
+      if (!approveRes.success) {
+        console.warn('Auto-approval sync note:', approveRes.error);
+      }
+    }
+
+    const idx = shops.findIndex(s => s.id === createdShopId);
+    if (idx !== -1) {
+      shops[idx].is_active = true;
+      shops[idx].approvalStatus = 'approved';
+      shops[idx].joinedDate = 'Just now';
+      localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+    }
+
+    const waitEl = document.getElementById('applyWaitingStep');
+    const approvedEl = document.getElementById('applyApprovedStep');
+    const modalEl = document.getElementById('applyMerchantModal');
+    if (modalEl && modalEl.classList.contains('active')) {
+      document.getElementById('approvedStoreNameLabel').textContent = name;
+      document.getElementById('approvedStoreCodeLabel').textContent = code;
+      if (waitEl) waitEl.style.display = 'none';
+      if (approvedEl) approvedEl.style.display = 'flex';
+      showToast(`Store "${name}" approved! You can now sign in.`, 'success');
+    }
+  }, 5000);
+}
+
+function proceedFromApprovalToLogin() {
+  const email = lastSubmittedApplication ? lastSubmittedApplication.email : '';
+  const password = lastSubmittedApplication ? lastSubmittedApplication.password : '';
+  closeApplyMerchantModal();
+  openAuthPortal(email, password);
 }
 
 // Quick 1-Click Login: Super Admin
@@ -181,6 +407,11 @@ async function handleLogin(e) {
     };
 
     if (res.shop) {
+      const rawDesc = String(res.shop.description || '');
+      const cleanCategory = rawDesc
+        .replace(/^\[(PENDING|REJECTED)\]\s*/i, '')
+        .replace(/\s*merchant store\.$/i, '')
+        .trim() || 'Fashion & Apparel';
       // Map shop cleanly and store accurately
       const mappedShop = {
         id: res.shop.id,
@@ -188,7 +419,8 @@ async function handleLogin(e) {
         code: (res.shop.store_code || '').toLowerCase(),
         ownerName: res.profile.full_name,
         ownerEmail: res.profile.email,
-        category: res.shop.description ? res.shop.description.replace(' merchant store.', '') : 'Fashion & Apparel',
+        category: cleanCategory,
+        approvalStatus: 'approved',
         vton_enabled: res.shop.vton_enabled === true,
         is_active: res.shop.is_active !== false
       };
@@ -224,6 +456,7 @@ function completeLogin(title) {
   localStorage.setItem('antigravity_admin_auth', 'true');
   localStorage.setItem('antigravity_current_user', JSON.stringify(currentUser));
 
+  document.body.classList.add('portal-authenticated');
   document.getElementById('authWrapper').classList.add('hidden');
   showToast(`Welcome! Signed in to ${title}`, 'success');
 
@@ -243,7 +476,8 @@ async function handleLogout() {
   resetProductsState();
   resetOrdersState();
   isDownloading = false;
-  document.getElementById('authWrapper').classList.remove('hidden');
+  document.body.classList.remove('portal-authenticated');
+  document.getElementById('authWrapper').classList.add('hidden');
   showToast('Logged out of session.', 'info');
 }
 
@@ -439,11 +673,74 @@ function autoGenerateEditStoreCode(name) {
 function renderSuperShops() {
   const allTbody = document.getElementById('superAllShopsTbody');
   const recentTbody = document.getElementById('superRecentShopsTbody');
+  const pendingTbody = document.getElementById('pendingAppsTbody');
+  const pendingCountBadge = document.getElementById('pendingAppsCountBadge');
+  const pendingStatEl = document.getElementById('superStatPending');
   const countBadge = document.getElementById('sidebarSuperShopsCount');
   const statBadge = document.getElementById('superStatShops');
 
+  const pendingShops = shops.filter(s => s.approvalStatus === 'pending');
+
   if (countBadge) countBadge.textContent = shops.length;
   if (statBadge) statBadge.textContent = shops.length;
+  if (pendingStatEl) pendingStatEl.textContent = pendingShops.length;
+  if (pendingCountBadge) {
+    pendingCountBadge.textContent = `${pendingShops.length} Pending`;
+    pendingCountBadge.className = `badge ${pendingShops.length > 0 ? 'badge-amber' : 'badge-emerald'}`;
+  }
+
+  // Render Pending Applications Queue
+  if (pendingTbody) {
+    if (pendingShops.length === 0) {
+      pendingTbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 34px 24px; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-check" style="color: var(--accent-emerald); margin-bottom: 8px; font-size: 1.4rem; display: block;"></i>
+            <strong>All caught up!</strong> No pending merchant applications awaiting review.
+          </td>
+        </tr>
+      `;
+    } else {
+      pendingTbody.innerHTML = pendingShops.map(s => {
+        const initial = (s.name || '?').trim().charAt(0).toUpperCase();
+        return `
+          <tr>
+            <td>
+              <div class="cell-store">
+                <div class="cell-avatar">${initial}</div>
+                <div class="cell-stack">
+                  <span class="cell-title">${escapeHtml(s.name)}</span>
+                  <span class="code-chip">${escapeHtml((s.code || '').toLowerCase())}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="cell-stack">
+                <span class="cell-title">${escapeHtml(s.ownerName)}</span>
+                <span class="cell-sub">${escapeHtml(s.ownerEmail)}</span>
+              </div>
+            </td>
+            <td><span class="badge badge-indigo badge-nowrap">${escapeHtml(s.category)}</span></td>
+            <td>
+              <span class="badge badge-amber badge-nowrap">
+                <i class="fa-solid fa-hourglass-half"></i> Pending Review
+              </span>
+            </td>
+            <td class="col-actions">
+              <div class="row-actions">
+                <button class="btn btn-primary btn-sm" onclick="approvePendingShop('${s.id}')" title="Approve application">
+                  <i class="fa-solid fa-check"></i> Approve
+                </button>
+                <button class="btn btn-outline btn-sm" style="border-color: rgba(244,63,94,0.4); color: var(--accent-rose);" onclick="rejectPendingShop('${s.id}')" title="Reject application">
+                  <i class="fa-solid fa-xmark"></i> Reject
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
 
   const searchVal = (document.getElementById('shopSearchInput')?.value || '').toLowerCase();
   const filtered = shops.filter(s => 
@@ -455,31 +752,42 @@ function renderSuperShops() {
 
   const renderRow = (s, isRecent = false) => {
     const active = s.is_active !== false;
+    const isPending = s.approvalStatus === 'pending';
+    const isRejected = s.approvalStatus === 'rejected';
     const initial = (s.name || '?').trim().charAt(0).toUpperCase();
+
+    let statusBadgeHtml = '';
+    if (isPending) {
+      statusBadgeHtml = `<span class="badge badge-nowrap badge-amber"><i class="fa-solid fa-hourglass-half"></i> Pending Review</span>`;
+    } else if (isRejected) {
+      statusBadgeHtml = `<span class="badge badge-nowrap badge-rose"><i class="fa-solid fa-circle-xmark"></i> Rejected</span>`;
+    } else {
+      statusBadgeHtml = `
+        <span class="badge badge-nowrap ${active ? 'badge-emerald' : 'badge-rose'}">
+          <i class="fa-solid ${active ? 'fa-circle-check' : 'fa-ban'}"></i>
+          ${active ? 'Active' : 'Deactivated'}
+        </span>`;
+    }
+
     return `
     <tr>
       <td>
         <div class="cell-store">
           <div class="cell-avatar">${initial}</div>
           <div class="cell-stack">
-            <span class="cell-title">${s.name}</span>
-            <span class="code-chip">${(s.code || '').toLowerCase()}</span>
+            <span class="cell-title">${escapeHtml(s.name)}</span>
+            <span class="code-chip">${escapeHtml((s.code || '').toLowerCase())}</span>
           </div>
         </div>
       </td>
       <td>
         <div class="cell-stack">
-          <span class="cell-title">${s.ownerName}</span>
-          <span class="cell-sub">${s.ownerEmail}</span>
+          <span class="cell-title">${escapeHtml(s.ownerName)}</span>
+          <span class="cell-sub">${escapeHtml(s.ownerEmail)}</span>
         </div>
       </td>
-      <td><span class="badge badge-indigo badge-nowrap">${s.category}</span></td>
-      <td>
-        <span class="badge badge-nowrap ${active ? 'badge-emerald' : 'badge-rose'}">
-          <i class="fa-solid ${active ? 'fa-circle-check' : 'fa-ban'}"></i>
-          ${active ? 'Active' : 'Deactivated'}
-        </span>
-      </td>
+      <td><span class="badge badge-indigo badge-nowrap">${escapeHtml(s.category)}</span></td>
+      <td>${statusBadgeHtml}</td>
       <td>
         <span class="badge badge-nowrap ${s.vton_enabled ? 'badge-cyan' : 'badge-amber'}">
           <i class="fa-solid ${s.vton_enabled ? 'fa-wand-magic-sparkles' : 'fa-clock'}"></i>
@@ -489,15 +797,26 @@ function renderSuperShops() {
       ${!isRecent ? `
         <td class="col-actions">
           <div class="row-actions">
-            <button class="icon-btn" onclick="openEditShopModal('${s.id}')" title="Edit store details" aria-label="Edit store">
-              <i class="fa-solid fa-pen-to-square"></i>
-            </button>
-            <button class="icon-btn ${active ? 'icon-btn-warn' : 'icon-btn-success'}" onclick="toggleShopActive('${s.id}')" title="${active ? 'Deactivate store' : 'Activate store'}" aria-label="${active ? 'Deactivate store' : 'Activate store'}">
-              <i class="fa-solid ${active ? 'fa-ban' : 'fa-circle-check'}"></i>
-            </button>
-            <button class="icon-btn icon-btn-cyan" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On engine" aria-label="Toggle VTON">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-            </button>
+            ${isPending || isRejected ? `
+              <button class="icon-btn icon-btn-success" onclick="approvePendingShop('${s.id}')" title="Approve merchant application" aria-label="Approve merchant">
+                <i class="fa-solid fa-check"></i>
+              </button>
+              ${isPending ? `
+                <button class="icon-btn icon-btn-danger" onclick="rejectPendingShop('${s.id}')" title="Reject merchant application" aria-label="Reject merchant">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              ` : ''}
+            ` : `
+              <button class="icon-btn" onclick="openEditShopModal('${s.id}')" title="Edit store details" aria-label="Edit store">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button class="icon-btn ${active ? 'icon-btn-warn' : 'icon-btn-success'}" onclick="toggleShopActive('${s.id}')" title="${active ? 'Deactivate store' : 'Activate store'}" aria-label="${active ? 'Deactivate store' : 'Activate store'}">
+                <i class="fa-solid ${active ? 'fa-ban' : 'fa-circle-check'}"></i>
+              </button>
+              <button class="icon-btn icon-btn-cyan" onclick="toggleShopVton('${s.id}')" title="Toggle Virtual Try-On engine" aria-label="Toggle VTON">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </button>
+            `}
             <span class="row-actions-divider"></span>
             <button class="icon-btn icon-btn-danger" onclick="handleDeleteShop('${s.id}')" title="Permanently delete shop" aria-label="Delete store">
               <i class="fa-solid fa-trash"></i>
@@ -617,6 +936,47 @@ async function handleSaveEditShop(e) {
   renderSuperShops();
 }
 
+// Super Admin: Approve / Reject Pending Merchant Application
+async function approvePendingShop(shopId) {
+  const shop = shops.find(s => s.id === shopId);
+  if (!shop) return;
+
+  if (window.db && window.db.approveShopApplication) {
+    const res = await window.db.approveShopApplication(shopId, shop.category);
+    if (!res.success) {
+      showToast(`Failed to approve store: ${escapeHtml(res.error)}`, 'error');
+      return;
+    }
+  }
+
+  shop.is_active = true;
+  shop.approvalStatus = 'approved';
+  shop.joinedDate = 'Just now';
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  showToast(`Approved "${shop.name}"! Merchant can now sign in.`, 'success');
+  renderSuperShops();
+}
+
+async function rejectPendingShop(shopId) {
+  const shop = shops.find(s => s.id === shopId);
+  if (!shop) return;
+  if (!confirm(`Reject the merchant application for "${shop.name}"?`)) return;
+
+  if (window.db && window.db.rejectShopApplication) {
+    const res = await window.db.rejectShopApplication(shopId, shop.category);
+    if (!res.success) {
+      showToast(`Failed to reject store: ${escapeHtml(res.error)}`, 'error');
+      return;
+    }
+  }
+
+  shop.is_active = false;
+  shop.approvalStatus = 'rejected';
+  localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
+  showToast(`Application for "${shop.name}" has been rejected.`, 'info');
+  renderSuperShops();
+}
+
 // Super Admin: Activate / Deactivate Shop
 async function toggleShopActive(shopId) {
   const shop = shops.find(s => s.id === shopId);
@@ -627,6 +987,7 @@ async function toggleShopActive(shopId) {
 
   if (confirm(`Are you sure you want to ${actionName} "${shop.name}"? ${!nextState ? 'The merchant will be prevented from accessing the portal.' : ''}`)) {
     shop.is_active = nextState;
+    shop.approvalStatus = 'approved';
     localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
     if (window.db && window.db.toggleShopActive) {
@@ -702,6 +1063,7 @@ async function handleSuperRegisterShop(e) {
       ownerName: ownerName,
       ownerEmail: ownerEmail,
       category: category,
+      approvalStatus: 'approved',
       vton_enabled: false,
       is_active: true,
       joinedDate: 'Just now'
@@ -726,6 +1088,7 @@ async function handleSuperRegisterShop(e) {
       ownerName,
       ownerEmail,
       category,
+      approvalStatus: 'approved',
       vton_enabled: false,
       is_active: true,
       joinedDate: 'Today'
@@ -773,6 +1136,7 @@ function triggerPluginDownloadAnimation() {
 
   const container = document.getElementById('downloadToggleContainer');
   const downloadBtn = document.getElementById('btnStartDownload');
+  const stateLabel = document.getElementById('downloadStateLabel');
   const progressTrack = document.getElementById('downloadProgressTrack');
   const progressFill = document.getElementById('downloadProgressFill');
   const percentText = document.getElementById('downloadPercentText');
@@ -780,42 +1144,63 @@ function triggerPluginDownloadAnimation() {
 
   container.classList.add('is-downloading');
   downloadBtn.disabled = true;
-  downloadBtn.style.opacity = '0.7';
-  downloadBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down download-arrow-icon"></i> <span>Downloading AI Package...</span>';
+  downloadBtn.style.opacity = '0.75';
+  downloadBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down download-arrow-icon"></i> <span>Downloading Plugin...</span>';
+  if (stateLabel) {
+    stateLabel.innerHTML = '<i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Downloading Package (12.4 MB)';
+  }
   progressTrack.style.display = 'block';
   progressFill.style.width = '0%';
 
   const steps = [
-    { at: 10, label: 'Resolving dependency: body_measurement_plugin v1.2.0...' },
-    { at: 35, label: 'Downloading YOLO-seg & Keypoint weights (12.4 MB)...' },
-    { at: 65, label: 'Compiling circumference calculation & size matching matrices...' },
-    { at: 88, label: 'Connecting to Supabase Cloud & configuring shops.vton_enabled...' },
-    { at: 100, label: 'Finalizing installation & starting real-time mobile sync...' }
+    { at: 0, phase: 'downloading', label: 'Connecting to official plugin repository...' },
+    { at: 14, phase: 'downloading', label: 'Downloading body_measurement_plugin-1.2.0.tar.gz (3.4 / 12.4 MB)...' },
+    { at: 32, phase: 'downloading', label: 'Downloading pose calibration & virtual fitting bundle (8.9 / 12.4 MB)...' },
+    { at: 50, phase: 'downloading', label: 'Download complete (12.4 / 12.4 MB) — verifying package checksum...' },
+    { at: 58, phase: 'installing', label: 'Installing plugin modules & sizing rules...' },
+    { at: 76, phase: 'installing', label: 'Registering virtual fitting room hook in storefront...' },
+    { at: 90, phase: 'installing', label: 'Activating plugin & syncing store status in Supabase...' },
+    { at: 100, phase: 'installing', label: 'Installed and ready!' }
   ];
 
   let currentPercent = 0;
-  const durationMs = 3000;
-  const intervalMs = 40;
+  const durationMs = 4200;
+  const intervalMs = 50;
   const stepIncrement = 100 / (durationMs / intervalMs);
 
   const downloadTimer = setInterval(() => {
     currentPercent += stepIncrement;
     if (currentPercent > 100) currentPercent = 100;
 
-    progressFill.style.width = `${Math.floor(currentPercent)}%`;
-    percentText.textContent = `${Math.floor(currentPercent)}%`;
+    const pct = Math.floor(currentPercent);
+    progressFill.style.width = `${pct}%`;
 
-    for (let s of steps) {
-      if (currentPercent >= s.at) {
-        stepsLog.innerHTML = `<i class="fa-solid fa-gear fa-spin" style="color: var(--accent-cyan);"></i> <span>${s.label}</span>`;
-      }
+    let activeStep = steps[0];
+    for (const s of steps) {
+      if (pct >= s.at) activeStep = s;
     }
+
+    if (activeStep.phase === 'downloading') {
+      percentText.textContent = `Downloading ${pct}%`;
+      if (stateLabel) {
+        stateLabel.innerHTML = '<i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Downloading Plugin';
+      }
+      downloadBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down download-arrow-icon"></i> <span>Downloading Plugin...</span>';
+    } else {
+      percentText.textContent = `Installing ${pct}%`;
+      if (stateLabel) {
+        stateLabel.innerHTML = '<i class="fa-solid fa-box-open" style="color: var(--accent-emerald);"></i> Installing Plugin';
+      }
+      downloadBtn.innerHTML = '<i class="fa-solid fa-gear fa-spin"></i> <span>Installing Plugin...</span>';
+    }
+
+    stepsLog.innerHTML = `<i class="fa-solid fa-gear fa-spin" style="color: var(--accent-cyan);"></i> <span>${activeStep.label}</span>`;
 
     if (currentPercent >= 100) {
       clearInterval(downloadTimer);
       setTimeout(() => {
         finishDownloadAnimation();
-      }, 400);
+      }, 450);
     }
   }, intervalMs);
 }
@@ -836,7 +1221,7 @@ async function finishDownloadAnimation() {
   shop.vton_enabled = true;
   localStorage.setItem('antigravity_platform_shops', JSON.stringify(shops));
 
-  showToast('🎉 Body Measurement & Virtual Try-On Plugin is now ACTIVE on Mobile!', 'success');
+  showToast('🎉 Body Measurement & Virtual Try-On Plugin downloaded, installed, and ACTIVE!', 'success');
   updatePluginStateUI();
   renderSuperShops();
 }
@@ -866,6 +1251,7 @@ function updatePluginStateUI() {
   const shop = getCurrentShop();
   const container = document.getElementById('downloadToggleContainer');
   const downloadBtn = document.getElementById('btnStartDownload');
+  const stateLabel = document.getElementById('downloadStateLabel');
   const progressTrack = document.getElementById('downloadProgressTrack');
   const progressFill = document.getElementById('downloadProgressFill');
   const percentText = document.getElementById('downloadPercentText');
@@ -882,9 +1268,12 @@ function updatePluginStateUI() {
     downloadBtn.style.display = 'none';
     progressTrack.style.display = 'none';
     installedView.style.display = 'flex';
+    if (stateLabel) {
+      stateLabel.innerHTML = '<i class="fa-solid fa-box-check" style="color: #10b981;"></i> Plugin Package (12.4 MB)';
+    }
     percentText.textContent = 'Installed (v1.2.0)';
     percentText.style.color = '#10b981';
-    stepsLog.innerHTML = '<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> <span>Synchronized with customer mobile app & Fashn AI API.</span>';
+    stepsLog.innerHTML = '<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> <span>Synchronized with mobile app &amp; virtual fitting engine.</span>';
     
     if (sidebarBadge) {
       sidebarBadge.textContent = 'VTON Active';
@@ -899,13 +1288,16 @@ function updatePluginStateUI() {
     downloadBtn.style.display = 'flex';
     downloadBtn.disabled = false;
     downloadBtn.style.opacity = '1';
-    downloadBtn.innerHTML = '<i class="fa-solid fa-download download-arrow-icon"></i> <span>Install & Activate Plugin</span>';
+    downloadBtn.innerHTML = '<i class="fa-solid fa-download download-arrow-icon"></i> <span>Download &amp; Install Plugin</span>';
+    if (stateLabel) {
+      stateLabel.innerHTML = '<i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Plugin Package (12.4 MB)';
+    }
     progressTrack.style.display = 'none';
     progressFill.style.width = '0%';
     installedView.style.display = 'none';
-    percentText.textContent = 'Ready to Install';
+    percentText.textContent = 'Ready to Download';
     percentText.style.color = 'var(--accent-cyan)';
-    stepsLog.innerHTML = '<span>Click to install neural weights & size matching engine.</span>';
+    stepsLog.innerHTML = '<span>Click to download package archive &amp; install plugin into your store.</span>';
     
     if (sidebarBadge) {
       sidebarBadge.textContent = 'VTON Inactive';
@@ -2299,8 +2691,15 @@ function closeModal(modalId) {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (pendingAutoAcceptTimer) {
+      clearTimeout(pendingAutoAcceptTimer);
+      pendingAutoAcceptTimer = null;
+    }
     document.querySelectorAll('.modal-overlay.active').forEach(modal => {
       modal.classList.remove('active');
     });
+    if (!isLoggedIn) {
+      closeAuthPortal();
+    }
   }
 });

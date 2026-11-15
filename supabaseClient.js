@@ -104,9 +104,22 @@ window.db = {
           owner_id: authUser.id
         };
 
-        // ⛔ Check if shop was deactivated by Super Admin
+        // ⛔ Check if shop is pending approval, rejected, or deactivated by Super Admin
         if (shop.is_active === false) {
+          const desc = String(shop.description || '');
           await supabaseClient.auth.signOut();
+          if (desc.startsWith('[PENDING]')) {
+            return {
+              success: false,
+              error: `Application Pending: "${shop.name}" is still waiting for Super Admin approval.`
+            };
+          }
+          if (desc.startsWith('[REJECTED]')) {
+            return {
+              success: false,
+              error: `Application Declined: "${shop.name}" was not approved by the Super Administrator.`
+            };
+          }
           return {
             success: false,
             error: `Access Denied: "${shop.name}" has been deactivated by the Super Administrator. Please contact platform support.`
@@ -130,6 +143,42 @@ window.db = {
 
   // 2. Super Admin: Register a new Merchant and Shop (lowercase code, no logo_url, is_active=true)
   async registerMerchantShop({ name, code, category, ownerName, ownerEmail, ownerPassword }) {
+    return this._createMerchantAccount({
+      name,
+      code,
+      category,
+      ownerName,
+      ownerEmail,
+      ownerPassword,
+      isActive: true,
+      descriptionPrefix: ''
+    });
+  },
+
+  // 2b. Public "Apply Now": Create a pending Merchant application (is_active=false until approved)
+  async applyMerchantShop({ name, code, category, ownerName, ownerEmail, ownerPassword }) {
+    return this._createMerchantAccount({
+      name,
+      code,
+      category,
+      ownerName,
+      ownerEmail,
+      ownerPassword,
+      isActive: false,
+      descriptionPrefix: '[PENDING] '
+    });
+  },
+
+  async _createMerchantAccount({
+    name,
+    code,
+    category,
+    ownerName,
+    ownerEmail,
+    ownerPassword,
+    isActive,
+    descriptionPrefix
+  }) {
     if (!supabaseClient) {
       return { success: false, error: 'Database client not connected.' };
     }
@@ -164,9 +213,10 @@ window.db = {
       }
 
       const merchantId = merchantUser.id;
+      const writeClient = authData.session ? tempAuthClient : supabaseClient;
 
       // B. Insert into public.user_profiles (no phone_number)
-      await supabaseClient
+      await writeClient
         .from('user_profiles')
         .upsert({
           id: merchantId,
@@ -175,17 +225,17 @@ window.db = {
           role: 'owner'
         });
 
-      // C. Insert into public.shops (lowercase store_code, is_active=true, no logo_url)
+      // C. Insert into public.shops
       const sanitizedCode = code.trim().toLowerCase();
-      const { data: newShop, error: shopErr } = await supabaseClient
+      const { data: newShop, error: shopErr } = await writeClient
         .from('shops')
         .insert({
           owner_id: merchantId,
           store_code: sanitizedCode,
           name: name.trim(),
-          description: `${category} merchant store.`,
+          description: `${descriptionPrefix}${category} merchant store.`,
           vton_enabled: false,
-          is_active: true
+          is_active: isActive
         })
         .select()
         .single();
@@ -197,6 +247,7 @@ window.db = {
       return {
         success: true,
         shop: newShop,
+        authClient: tempAuthClient,
         owner: {
           id: merchantId,
           name: ownerName,
@@ -206,6 +257,68 @@ window.db = {
 
     } catch (err) {
       console.error('Shop registration error:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  // 2c. Approve a pending merchant shop application (clears [PENDING]/[REJECTED] and activates shop)
+  async approveShopApplication(shopId, category = 'Casual & Streetwear', preferredClient = null) {
+    if (!supabaseClient) return { success: true };
+    const cleanCategory = String(category || 'Casual & Streetwear')
+      .replace(/^\[(PENDING|REJECTED)\]\s*/i, '')
+      .replace(/\s*merchant store\.$/i, '')
+      .trim() || 'Casual & Streetwear';
+    const payload = {
+      is_active: true,
+      description: `${cleanCategory} merchant store.`
+    };
+
+    const clientsToTry = preferredClient ? [preferredClient, supabaseClient] : [supabaseClient];
+    let lastErr = null;
+    for (const client of clientsToTry) {
+      try {
+        const { data, error } = await client
+          .from('shops')
+          .update(payload)
+          .eq('id', shopId)
+          .select('id, is_active, description');
+        if (!error && data && data.length > 0) {
+          return { success: true, data: data[0] };
+        }
+        if (error) lastErr = error;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    return {
+      success: false,
+      error: (lastErr && lastErr.message) || 'Could not approve shop application in Supabase.'
+    };
+  },
+
+  // 2d. Reject a pending merchant shop application
+  async rejectShopApplication(shopId, category = 'Casual & Streetwear') {
+    if (!supabaseClient) return { success: true };
+    const cleanCategory = String(category || 'Casual & Streetwear')
+      .replace(/^\[(PENDING|REJECTED)\]\s*/i, '')
+      .replace(/\s*merchant store\.$/i, '')
+      .trim() || 'Casual & Streetwear';
+    try {
+      const { data, error } = await supabaseClient
+        .from('shops')
+        .update({
+          is_active: false,
+          description: `[REJECTED] ${cleanCategory} merchant store.`
+        })
+        .eq('id', shopId)
+        .select('id, is_active, description');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { success: false, error: 'Could not reject shop application (not found or blocked by RLS).' };
+      }
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error('Error rejecting shop:', err);
       return { success: false, error: err.message };
     }
   },
@@ -331,13 +444,25 @@ window.db = {
 
       return (shopsData || []).map(s => {
         const owner = profilesMap[s.owner_id] || {};
+        const rawDesc = String(s.description || '');
+        let approvalStatus = 'approved';
+        if (s.is_active === false && rawDesc.startsWith('[PENDING]')) {
+          approvalStatus = 'pending';
+        } else if (s.is_active === false && rawDesc.startsWith('[REJECTED]')) {
+          approvalStatus = 'rejected';
+        }
+        const cleanCategory = rawDesc
+          .replace(/^\[(PENDING|REJECTED)\]\s*/i, '')
+          .replace(/\s*merchant store\.$/i, '')
+          .trim() || 'Fashion & Apparel';
         return {
           id: s.id,
           name: s.name,
           code: (s.store_code || '').toLowerCase(),
           ownerName: owner.full_name || 'Merchant Owner',
           ownerEmail: owner.email || 'N/A',
-          category: s.description ? s.description.replace(' merchant store.', '') : 'Fashion & Apparel',
+          category: cleanCategory,
+          approvalStatus,
           vton_enabled: s.vton_enabled === true,
           is_active: s.is_active !== false, // Defaults to true
           joinedDate: s.created_at ? new Date(s.created_at).toLocaleDateString() : 'Active'

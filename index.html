@@ -14,29 +14,269 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Standalone Stylesheet -->
-  <link rel="stylesheet" href="styles.css?v=1.1.0">
+  <link rel="stylesheet" href="styles.css?v=1.2.0">
 </head>
 <body>
 
   <!-- =========================================================================
-       1. Auth Screen Overlay (Login Only - Registration done by Super Admin)
+       0. Public Landing & Developer Integration Home Page (First Screen)
        ========================================================================= -->
-  <div id="authWrapper" class="auth-wrapper">
+  <div id="publicPortal" class="public-portal">
+    <!-- Sticky Top Navbar -->
+    <header class="public-navbar">
+      <div class="public-nav-inner">
+        <a href="#publicHero" class="public-brand">
+          <div class="brand-icon">
+            <i class="fa-solid fa-vest-patches"></i>
+          </div>
+          <div class="brand-title">
+            <h1>BodyFit Plugin</h1>
+            <span>Virtual Sizing &amp; Try-On</span>
+          </div>
+        </a>
+
+        <nav class="public-nav-links">
+          <a href="#howApplyingWorks">How It Works</a>
+          <a href="#publicPluginDirectory">Available Plugin</a>
+          <a href="#developerFlutterGuide">Flutter Setup</a>
+        </nav>
+
+        <div class="public-nav-actions">
+          <button type="button" class="btn btn-outline btn-sm" onclick="openAuthPortal()">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign In
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="openApplyMerchantModal()">
+            <i class="fa-solid fa-store"></i> Apply Now
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="public-main">
+      <!-- Hero Section (Plain-English for Shop Owners, Panelists & Developers) -->
+      <section id="publicHero" class="public-hero">
+        <div class="public-hero-pill">
+          <i class="fa-solid fa-sparkles"></i> Easy Virtual Fitting Room for Mobile Shopping Apps
+        </div>
+        <h2>Let Shoppers Find Their Exact Size &amp; Preview Outfits Before Buying</h2>
+        <p class="public-hero-sub">
+          <strong>Body Measurement &amp; Virtual Try-On</strong> is an add-on plugin for mobile clothing apps.
+          Using just a phone camera, shoppers get their body measurements, a clear size recommendation,
+          and a virtual outfit preview — reducing guesswork and sizing returns.
+        </p>
+
+        <div class="public-hero-ctas">
+          <button type="button" class="btn btn-primary" onclick="openApplyMerchantModal()">
+            <i class="fa-solid fa-file-signature"></i> Apply Now as a Store
+          </button>
+          <a href="#developerFlutterGuide" class="btn btn-secondary">
+            <i class="fa-solid fa-code"></i> Add to Flutter App
+          </a>
+          <button type="button" class="btn btn-outline" onclick="openAuthPortal()">
+            <i class="fa-solid fa-user-shield"></i> Merchant / Admin Sign In
+          </button>
+        </div>
+
+        <div class="public-audience-grid">
+          <div class="audience-card">
+            <div class="audience-icon cyan"><i class="fa-solid fa-mobile-screen-button"></i></div>
+            <div>
+              <h3>For Mobile Developers (Standalone)</h3>
+              <p>Install the plugin straight into any Flutter app in two minutes — no admin portal or backend setup required.</p>
+            </div>
+          </div>
+          <div class="audience-card">
+            <div class="audience-icon indigo"><i class="fa-solid fa-shop"></i></div>
+            <div>
+              <h3>For Store Owners (Managed Portal)</h3>
+              <p>Create your store account with <strong>Apply Now</strong>, wait for approval on screen, then sign in to download and turn on the plugin for your shop.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How Store Application Works (Includes Clear "Do Not Exit Screen" Info) -->
+      <section id="howApplyingWorks" class="public-section">
+        <div class="public-section-header">
+          <span class="section-eyebrow">Simple Store Onboarding</span>
+          <h2>How Joining as a Store Works</h2>
+          <p>Anyone can apply to connect a store — no developer intervention needed once your app includes the plugin.</p>
+        </div>
+
+        <div class="public-steps-grid">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <h4>Submit Store Application</h4>
+            <p>Click <strong>Apply Now</strong> and enter your shop brand name, clothing category, and sign-in email and password.</p>
+          </div>
+          <div class="step-card step-card-highlight">
+            <div class="step-num">2</div>
+            <h4>Stay on the Review Screen</h4>
+            <p><strong>Important:</strong> After submitting, you will be prompted <strong>not to exit, refresh, or close the screen</strong> while your application is verified.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <h4>Automatic Approval Notice</h4>
+            <p>As soon as your request is approved, the screen updates right away so you can sign into your new Store Owner dashboard.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <h4>Download &amp; Turn On Plugin</h4>
+            <p>Open <strong>Settings &rarr; Available Plugins</strong>, click <strong>Download &amp; Install</strong>, and the fitting-room button goes live in your store.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Available Plugins Directory (Only 1 Plugin Listed) -->
+      <section id="publicPluginDirectory" class="public-section">
+        <div class="public-section-header">
+          <span class="section-eyebrow">Plugin Catalog &bull; 1 Available</span>
+          <h2>Available Storefront Plugin</h2>
+          <p>Only our verified fitting-room plugin is listed in the catalog right now.</p>
+        </div>
+
+        <div class="public-plugin-list">
+          <div class="plugin-catalog-card">
+            <div class="plugin-catalog-main">
+              <div class="plugin-hero-icon">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
+              <div class="plugin-catalog-body">
+                <div class="plugin-catalog-badges">
+                  <span class="badge badge-indigo">body_measurement_plugin v1.2.0</span>
+                  <span class="badge badge-emerald"><i class="fa-solid fa-circle-check"></i> Verified Official Plugin</span>
+                  <span class="badge badge-cyan">Flutter Android &amp; iOS</span>
+                </div>
+                <h3>Body Measurement &amp; Virtual Try-On Plugin</h3>
+                <p>
+                  Guides shoppers through a quick front and side camera pose check, estimates chest/bust, waist, and hip measurements using their height, recommends the best-fitting size, and generates a virtual try-on outfit preview before checkout.
+                </p>
+                <div class="plugin-feature-pills">
+                  <span><i class="fa-solid fa-camera"></i> Guided Camera Capture</span>
+                  <span><i class="fa-solid fa-ruler"></i> Automatic Size Match</span>
+                  <span><i class="fa-solid fa-shirt"></i> Virtual Outfit Try-On</span>
+                  <span><i class="fa-solid fa-plug-circle-check"></i> Works With Any Product Screen</span>
+                </div>
+              </div>
+            </div>
+            <div class="plugin-catalog-actions">
+              <button type="button" class="btn btn-primary" onclick="openApplyMerchantModal()">
+                <i class="fa-solid fa-rocket"></i> Apply Now to Use
+              </button>
+              <a href="#developerFlutterGuide" class="btn btn-outline">
+                <i class="fa-solid fa-code"></i> Flutter Install Guide
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- For Developers: How to Add the Plugin into Flutter -->
+      <section id="developerFlutterGuide" class="public-section">
+        <div class="public-section-header">
+          <span class="section-eyebrow">Developer Guide</span>
+          <h2>How to Add the Plugin Into Any Flutter App</h2>
+          <p>Follow these quick steps in your Flutter project — no admin account or external backend required to run.</p>
+        </div>
+
+        <div class="dev-guide-grid">
+          <div class="dev-step-card">
+            <div class="dev-step-head">
+              <span class="badge badge-indigo">Step 1</span>
+              <h4>Add to <code>pubspec.yaml</code></h4>
+              <button type="button" class="btn btn-outline btn-sm copy-snippet-btn" onclick="copyCodeSnippet('snippetPubspec', this)">
+                <i class="fa-regular fa-copy"></i> Copy
+              </button>
+            </div>
+            <p class="dev-step-note">Paste this under <code>dependencies:</code> in your Flutter app, then run <code>flutter pub get</code>.</p>
+            <pre class="code-block" id="snippetPubspec">dependencies:
+  body_measurement_plugin:
+    git:
+      url: https://github.com/bgdygdh/plugin.git
+      ref: main</pre>
+          </div>
+
+          <div class="dev-step-card">
+            <div class="dev-step-head">
+              <span class="badge badge-cyan">Step 2</span>
+              <h4>Launch From Any Button</h4>
+              <button type="button" class="btn btn-outline btn-sm copy-snippet-btn" onclick="copyCodeSnippet('snippetMinimal', this)">
+                <i class="fa-regular fa-copy"></i> Copy
+              </button>
+            </div>
+            <p class="dev-step-note">Works even if your app has no product page or metadata yet — the plugin collects anything missing inside the flow.</p>
+            <pre class="code-block" id="snippetMinimal">import 'package:body_measurement_plugin/body_measurement_plugin.dart';
+
+final result = await BodyMeasurementPlugin().startCapture(context);
+if (result?.recommendation != null) {
+  print('Best size: ${result!.recommendation!.recommendedSize}');
+}</pre>
+          </div>
+
+          <div class="dev-step-card dev-step-wide">
+            <div class="dev-step-head">
+              <span class="badge badge-emerald">Step 3 (Optional)</span>
+              <h4>Pre-Fill Product Photo &amp; Category From Your Product Page</h4>
+              <button type="button" class="btn btn-outline btn-sm copy-snippet-btn" onclick="copyCodeSnippet('snippetProduct', this)">
+                <i class="fa-regular fa-copy"></i> Copy
+              </button>
+            </div>
+            <p class="dev-step-note">If your shopping app already knows the garment photo and category, pass them in so the try-on screen loads your item automatically.</p>
+            <pre class="code-block" id="snippetProduct">final result = await BodyMeasurementPlugin().startCapture(
+  context,
+  userGender: Gender.female,
+  initialGarmentType: GarmentType.dress,
+  tryOnCategory: TryOnCategory.onePieces,
+  garmentImageUrl: product.imageUrl,
+);</pre>
+            <div class="dev-requirements-strip">
+              <span><i class="fa-brands fa-flutter"></i> Flutter <code>&gt;=3.3.0</code> &bull; Dart <code>^3.10.7</code></span>
+              <span><i class="fa-brands fa-android"></i> Android <code>minSdk 24</code> (Camera merged automatically)</span>
+              <span><i class="fa-brands fa-apple"></i> iOS <code>13.0+</code> (Add <code>NSCameraUsageDescription</code> in <code>Info.plist</code>)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="public-footer">
+      <span>Body Measurement &amp; Virtual Try-On Plugin Platform</span>
+      <div style="display: flex; gap: 16px;">
+        <a href="https://github.com/bgdygdh/plugin" target="_blank" rel="noopener">GitHub Repository</a>
+        <a href="javascript:void(0)" onclick="openApplyMerchantModal()">Apply Now</a>
+        <a href="javascript:void(0)" onclick="openAuthPortal()">Portal Sign In</a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- =========================================================================
+       1. Auth Screen Overlay (Hidden until "Sign In" is clicked)
+       ========================================================================= -->
+  <div id="authWrapper" class="auth-wrapper hidden">
     <div class="auth-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeAuthPortal()">
+          <i class="fa-solid fa-arrow-left"></i> Back to Home
+        </button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeAuthPortal(); openApplyMerchantModal();">
+          <i class="fa-solid fa-store"></i> Apply Now
+        </button>
+      </div>
+
       <div class="auth-brand">
         <div class="brand-icon">
           <i class="fa-solid fa-vest-patches"></i>
         </div>
         <div class="brand-title">
-          <h1>Antigravity Admin</h1>
-          <span>Portal Access</span>
+          <h1>BodyFit Portal</h1>
+          <span>Merchant &amp; Admin Access</span>
         </div>
       </div>
 
       <div style="text-align: center; margin-bottom: 20px;">
         <h2 style="font-size: 1.25rem; font-weight: 700;">Sign in to your Account</h2>
         <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
-          Access the Super Admin console or your Store Merchant backstage
+          Access the Super Admin queue or your approved Store Merchant backstage
         </p>
       </div>
 
@@ -54,6 +294,13 @@
           <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Dashboard
         </button>
       </form>
+
+      <div style="text-align: center; margin-top: 16px; font-size: 0.8rem; color: var(--text-muted);">
+        New merchant store?
+        <a href="javascript:void(0)" onclick="closeAuthPortal(); openApplyMerchantModal();" style="color: var(--accent-cyan); font-weight: 600; text-decoration: none;">
+          Apply Now for Approval &rarr;
+        </a>
+      </div>
     </div>
   </div>
 
@@ -170,22 +417,22 @@
               <span class="stat-title">Registered Shops</span>
               <div class="stat-icon indigo"><i class="fa-solid fa-store"></i></div>
             </div>
-            <div class="stat-value" id="superStatShops">3</div>
+            <div class="stat-value" id="superStatShops">0</div>
             <div class="stat-trend">
-              <span class="trend-up"><i class="fa-solid fa-circle-check"></i> All active</span>
-              <span>on platform</span>
+              <span class="trend-up"><i class="fa-solid fa-circle-check"></i> Platform directory</span>
+              <span>total stores</span>
             </div>
           </div>
 
           <div class="stat-card">
             <div class="stat-header">
-              <span class="stat-title">Platform GMV</span>
-              <div class="stat-icon emerald"><i class="fa-solid fa-dollar-sign"></i></div>
+              <span class="stat-title">Pending Applications</span>
+              <div class="stat-icon amber"><i class="fa-solid fa-hourglass-half"></i></div>
             </div>
-            <div class="stat-value">$324,850.00</div>
+            <div class="stat-value" id="superStatPending">0</div>
             <div class="stat-trend">
-              <span class="trend-up"><i class="fa-solid fa-arrow-trend-up"></i> +28.4%</span>
-              <span>across all shops</span>
+              <span class="trend-up"><i class="fa-solid fa-inbox"></i> Merchant queue</span>
+              <span>awaiting review</span>
             </div>
           </div>
 
@@ -203,12 +450,45 @@
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-title">Active Garments</span>
-              <div class="stat-icon amber"><i class="fa-solid fa-shirt"></i></div>
+              <div class="stat-icon emerald"><i class="fa-solid fa-shirt"></i></div>
             </div>
             <div class="stat-value">148 Items</div>
             <div class="stat-trend">
               <span class="trend-up"><i class="fa-solid fa-check"></i> Multi-tenant</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Pending Merchant Applications Queue -->
+        <div class="card card-flush" id="pendingAppsCard" style="margin-bottom: 24px;">
+          <div class="card-header card-header-padded">
+            <div>
+              <h3>
+                <i class="fa-solid fa-inbox" style="color: var(--accent-amber);"></i>
+                Pending Merchant Applications
+                <span class="badge badge-amber" id="pendingAppsCountBadge" style="margin-left: 8px;">0 Pending</span>
+              </h3>
+              <span class="card-subtitle">Review merchant self-applications submitted via the public portal and approve or reject access.</span>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="syncSupabaseShops(true)">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh Queue
+            </button>
+          </div>
+          <div class="table-container table-flush">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Applicant Store</th>
+                  <th>Owner &amp; Email</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th class="col-actions">Decision</th>
+                </tr>
+              </thead>
+              <tbody id="pendingAppsTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -360,7 +640,7 @@
             </div>
             <div class="banner-text">
               <h4>Virtual Try-On & Body Sizing Engine</h4>
-              <p>Plugin state: <span id="bannerPluginStatus" style="font-weight: 700; color: #10b981;">Ready to Activate</span> — Powered by YOLO-seg & Keypoints & Fashn AI.</p>
+              <p>Plugin state: <span id="bannerPluginStatus" style="font-weight: 700; color: #10b981;">Ready to Activate</span> — Powered by Automated Body Measurement &amp; AI Virtual Try-On.</p>
             </div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="switchTab('settings')">
@@ -569,79 +849,94 @@
       <section id="tab-settings" class="tab-view">
         <div class="settings-section">
 
-          <!-- 1. STAR FEATURE: Virtual Try-On & Body Measurement Plugin Activation Card -->
-          <div class="plugin-integration-box">
-            <div class="plugin-box-header">
-              <div class="plugin-meta">
-                <div class="plugin-hero-icon">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i>
-                </div>
-                <div class="plugin-title">
-                  <h3>
-                    <span>Body Measurement & Virtual Try-On SDK</span>
-                    <span class="badge badge-indigo">v1.2.0 Production</span>
-                  </h3>
-                  <p>
-                    Connect our high-precision AI body measurement algorithm and Fashn AI try-on engine directly into your mobile storefront. When activated, the <strong>"Find My Size & Try-On"</strong> button is immediately enabled for shoppers in your mobile app.
-                  </p>
-                </div>
-              </div>
-
-              <!-- THE INTERACTIVE DOWNLOAD ANIMATION TOGGLE WIDGET -->
-              <div class="download-toggle-container" id="downloadToggleContainer">
-                <div class="download-status-bar">
-                  <span class="download-label" id="downloadStateLabel">
-                    <i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Plugin Package
-                  </span>
-                  <span class="download-percentage" id="downloadPercentText">Ready to Install</span>
-                </div>
-
-                <div class="download-progress-track" id="downloadProgressTrack">
-                  <div class="download-progress-fill" id="downloadProgressFill"></div>
-                </div>
-
-                <button id="btnStartDownload" class="btn-download-action" onclick="triggerPluginDownloadAnimation()">
-                  <i class="fa-solid fa-download download-arrow-icon"></i>
-                  <span id="btnDownloadText">Install & Activate Plugin</span>
-                </button>
-
-                <div class="installed-switch-view" id="installedSwitchView">
-                  <div class="installed-status-info">
-                    <span class="installed-badge-dot"></span>
-                    <div>
-                      <div style="font-weight: 700; font-size: 0.88rem; color: #10b981;">PLUGIN ACTIVE</div>
-                      <div style="font-size: 0.72rem; color: var(--text-muted);">shops.vton_enabled = true</div>
-                    </div>
-                  </div>
-                  <button class="btn-deactivate" onclick="deactivatePlugin()">
-                    <i class="fa-solid fa-power-off"></i> Deactivate
-                  </button>
-                </div>
-
-                <div class="download-steps-log" id="downloadStepsLog">
-                  <span>Click to install neural weights & size matching engine.</span>
-                </div>
-              </div>
+          <!-- 1. STOREFRONT PLUGIN DIRECTORY (Only Official Plugin Listed) -->
+          <div class="plugin-directory-header">
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-puzzle-piece" style="color: var(--primary);"></i>
+                <span>Available Storefront Plugins</span>
+                <span class="badge badge-indigo">1 Plugin Listed</span>
+              </h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Official plugin directory for your store. Only verified plugins approved for this platform are listed below.
+              </p>
             </div>
+          </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px;">
-              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
-                  <i class="fa-solid fa-ruler-combined" style="color: var(--primary);"></i> YOLO-seg & Keypoints
+          <div class="plugin-list-stack">
+            <div class="plugin-integration-box">
+              <div class="plugin-box-header">
+                <div class="plugin-meta">
+                  <div class="plugin-hero-icon">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  </div>
+                  <div class="plugin-title">
+                    <h3>
+                      <span>Body Measurement &amp; Virtual Try-On Plugin</span>
+                      <span class="badge badge-indigo">v1.2.0 Official</span>
+                    </h3>
+                    <p>
+                      Download and install the official body sizing &amp; virtual try-on plugin into your store. Once installed and active, the <strong>"Find My Size &amp; Try-On"</strong> experience turns on immediately for shoppers in your mobile app.
+                    </p>
+                  </div>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-muted);">Calculates chest, waist, hips, inseam and heights automatically.</div>
+
+                <!-- DOWNLOADING & INSTALLING PROGRESS WIDGET -->
+                <div class="download-toggle-container" id="downloadToggleContainer">
+                  <div class="download-status-bar">
+                    <span class="download-label" id="downloadStateLabel">
+                      <i class="fa-solid fa-cloud-arrow-down" style="color: var(--accent-cyan);"></i> Plugin Package (12.4 MB)
+                    </span>
+                    <span class="download-percentage" id="downloadPercentText">Ready to Download</span>
+                  </div>
+
+                  <div class="download-progress-track" id="downloadProgressTrack">
+                    <div class="download-progress-fill" id="downloadProgressFill"></div>
+                  </div>
+
+                  <button id="btnStartDownload" class="btn-download-action" onclick="triggerPluginDownloadAnimation()">
+                    <i class="fa-solid fa-download download-arrow-icon"></i>
+                    <span id="btnDownloadText">Download &amp; Install Plugin</span>
+                  </button>
+
+                  <div class="installed-switch-view" id="installedSwitchView">
+                    <div class="installed-status-info">
+                      <span class="installed-badge-dot"></span>
+                      <div>
+                        <div style="font-weight: 700; font-size: 0.88rem; color: #10b981;">INSTALLED &amp; ACTIVE</div>
+                        <div style="font-size: 0.72rem; color: var(--text-muted);">Live in storefront &bull; shops.vton_enabled = true</div>
+                      </div>
+                    </div>
+                    <button class="btn-deactivate" onclick="deactivatePlugin()">
+                      <i class="fa-solid fa-power-off"></i> Uninstall / Disable
+                    </button>
+                  </div>
+
+                  <div class="download-steps-log" id="downloadStepsLog">
+                    <span>Click to download package archive &amp; install plugin into your store.</span>
+                  </div>
+                </div>
               </div>
-              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
-                  <i class="fa-solid fa-shirt" style="color: var(--accent-cyan);"></i> Fashn AI Virtual Try-On
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px;">
+                <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                  <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                    <i class="fa-solid fa-ruler-combined" style="color: var(--primary);"></i> Body Sizing &amp; Calibration
+                  </div>
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">Calculates chest/bust, waist, and hip measurements automatically from front and side captures.</div>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-muted);">Photo-realistic try-on previews generated in under 10 seconds.</div>
-              </div>
-              <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
-                  <i class="fa-solid fa-database" style="color: var(--accent-emerald);"></i> 1-Click Database Sync
+                <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                  <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                    <i class="fa-solid fa-shirt" style="color: var(--accent-cyan);"></i> AI Virtual Try-On
+                  </div>
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">Lets customers preview how garments look on them before adding items to cart.</div>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-muted);">Live PostgreSQL updates in Supabase `shops.vton_enabled`.</div>
+                <div style="background: rgba(15, 21, 35, 0.6); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                  <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                    <i class="fa-solid fa-database" style="color: var(--accent-emerald);"></i> 1-Click Storefront Sync
+                  </div>
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">Syncs installation status directly to your store record in Supabase.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -978,6 +1273,129 @@
     </div>
   </div>
 
+  <!-- Public: Apply Now Merchant Application Modal -->
+  <div id="applyMerchantModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-store" style="color: var(--primary);"></i> Apply for a Merchant Store Account</h3>
+        <button type="button" class="modal-close" onclick="closeApplyMerchantModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Step 1: Application Form -->
+      <form id="applyMerchantForm" onsubmit="handleApplyMerchant(event)">
+        <div class="modal-body" id="applyFormStep">
+          <div class="apply-notice-box">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+              <strong>Important before you submit:</strong> After clicking <em>Submit Application</em>, please <strong>stay on the next screen and do not exit, refresh, or close the tab</strong> while your store request is checked and approved.
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Store / Brand Name</label>
+              <input type="text" id="applyShopName" class="form-input" placeholder="e.g. Urban Threads" required oninput="autoGenerateApplyStoreCode(this.value)">
+            </div>
+            <div class="form-group">
+              <label>Store Identifier Code</label>
+              <input type="text" id="applyShopCode" class="form-input" placeholder="e.g. urban-threads" style="text-transform: lowercase; font-family: var(--font-mono);" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Clothing Category</label>
+            <select id="applyShopCategory" class="form-input" required>
+              <option value="Casual & Streetwear">Casual &amp; Streetwear</option>
+              <option value="Luxury & Formalwear">Luxury &amp; Formalwear</option>
+              <option value="Activewear & Sports">Activewear &amp; Sports</option>
+              <option value="Denim & Apparel">Denim &amp; Apparel</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label>Your Full Name</label>
+              <input type="text" id="applyOwnerName" class="form-input" placeholder="e.g. Alex Rivera" required>
+            </div>
+            <div class="form-group">
+              <label>Work Email (Sign-In ID)</label>
+              <input type="email" id="applyOwnerEmail" class="form-input" placeholder="owner@yourstore.com" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Create Account Password</label>
+            <input type="password" id="applyOwnerPassword" class="form-input" placeholder="Minimum 6 characters" minlength="6" required>
+          </div>
+        </div>
+
+        <div class="modal-footer" id="applyFormFooter">
+          <button type="button" class="btn btn-secondary" onclick="closeApplyMerchantModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitApplication">
+            <i class="fa-solid fa-paper-plane"></i> Submit Application
+          </button>
+        </div>
+      </form>
+
+      <!-- Step 2: Waiting Screen (No timer / countdown visible) -->
+      <div id="applyWaitingStep" class="modal-body apply-status-screen" style="display: none;">
+        <div class="apply-waiting-icon">
+          <i class="fa-solid fa-hourglass-half fa-spin"></i>
+        </div>
+        <span class="badge badge-amber" style="margin-bottom: 10px;">
+          <i class="fa-solid fa-shield-halved"></i> Pending Administrator Review
+        </span>
+        <h4>Application Submitted &mdash; Please Do Not Exit This Screen</h4>
+        <p class="apply-status-lead">
+          Your store application for <strong id="waitingStoreNameLabel">Your Store</strong> (<code id="waitingStoreCodeLabel">store-code</code>) is now in the approval queue.
+        </p>
+
+        <div class="apply-instructions-list">
+          <div class="apply-instruction-item">
+            <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-amber);"></i>
+            <span><strong>Do not close or refresh this screen:</strong> Leaving this page before review finishes may require waiting to sign in manually.</span>
+          </div>
+          <div class="apply-instruction-item">
+            <i class="fa-solid fa-clock" style="color: var(--accent-cyan);"></i>
+            <span><strong>What happens while you wait:</strong> Your store credentials and profile are being verified by the platform administrator.</span>
+          </div>
+          <div class="apply-instruction-item">
+            <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-emerald);"></i>
+            <span><strong>Next step:</strong> Once approved, this screen updates automatically so you can sign in and download the plugin.</span>
+          </div>
+        </div>
+
+        <div class="apply-live-status-pill">
+          <span class="pulse-dot"></span>
+          <span>Waiting for administrator approval...</span>
+        </div>
+      </div>
+
+      <!-- Step 3: Approved Confirmation Screen -->
+      <div id="applyApprovedStep" class="modal-body apply-status-screen" style="display: none;">
+        <div class="apply-approved-icon">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <span class="badge badge-emerald" style="margin-bottom: 10px;">
+          <i class="fa-solid fa-check"></i> Approved &amp; Ready
+        </span>
+        <h4>Store Application Approved!</h4>
+        <p class="apply-status-lead">
+          <strong id="approvedStoreNameLabel">Your Store</strong> (<code id="approvedStoreCodeLabel">store-code</code>) is now active. Sign in below, open <strong>Settings &rarr; Available Storefront Plugins</strong>, and download the plugin to activate it.
+        </p>
+
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 20px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" onclick="proceedFromApprovalToLogin()">
+            <i class="fa-solid fa-right-to-bracket"></i> Proceed to Store Sign In
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeApplyMerchantModal()">
+            Stay on Home Page
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
@@ -985,7 +1403,7 @@
        5. JavaScript Execution
        ========================================================================= -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabaseClient.js?v=1.2.0"></script>
-  <script src="app.js?v=1.2.0"></script>
+  <script src="supabaseClient.js?v=1.3.0"></script>
+  <script src="app.js?v=1.3.0"></script>
 </body>
 </html>
