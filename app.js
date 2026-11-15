@@ -642,7 +642,7 @@ async function toggleShopActive(shopId) {
 async function handleDeleteShop(shopId) {
   const target = shops.find(s => s.id === shopId);
   const shopName = target ? target.name : 'this shop';
-  if (!confirm(`Are you sure you want to permanently delete "${shopName}" from Supabase? This action cannot be undone.`)) {
+  if (!confirm(`Are you sure you want to permanently delete "${shopName}" and all of its orders, products, and categories from Supabase? This action cannot be undone.`)) {
     return;
   }
 

@@ -252,10 +252,49 @@ window.db = {
     }
   },
 
-  // 5. Super Admin: Delete a shop from Supabase
+  // 5. Super Admin: Delete a shop (and its child records) from Supabase
   async deleteShop(shopId) {
     if (!supabaseClient) return { success: true };
     try {
+      const { data: orderRows, error: orderFetchErr } = await supabaseClient
+        .from('orders')
+        .select('id')
+        .eq('shop_id', shopId);
+      if (orderFetchErr) throw orderFetchErr;
+
+      const { data: productRows, error: productFetchErr } = await supabaseClient
+        .from('products')
+        .select('id')
+        .eq('shop_id', shopId);
+      if (productFetchErr) throw productFetchErr;
+
+      const orderIds = (orderRows || []).map(r => r.id).filter(Boolean);
+      const productIds = (productRows || []).map(r => r.id).filter(Boolean);
+
+      if (orderIds.length > 0) {
+        const { error } = await supabaseClient
+          .from('order_line_items')
+          .delete()
+          .in('order_id', orderIds);
+        if (error) throw error;
+      }
+
+      if (productIds.length > 0) {
+        const { error } = await supabaseClient
+          .from('order_line_items')
+          .delete()
+          .in('product_id', productIds);
+        if (error) throw error;
+      }
+
+      for (const table of ['orders', 'products', 'categories']) {
+        const { error } = await supabaseClient
+          .from(table)
+          .delete()
+          .eq('shop_id', shopId);
+        if (error) throw error;
+      }
+
       const { error } = await supabaseClient
         .from('shops')
         .delete()
