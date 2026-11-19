@@ -221,13 +221,29 @@
             <p class="dev-step-note">Ideal when adding the plugin quickly with zero backend changes. The plugin prompts the shopper for height, gender, photos, garment category, and try-on garment image inside its own flow.</p>
             <pre class="code-block" id="snippetMinimal">import 'package:body_measurement_plugin/body_measurement_plugin.dart';
 
-// Inside any button's onPressed handler:
-final result = await BodyMeasurementPlugin().startCapture(context);
-final recommendedSize = result?.recommendation?.recommendedSize;
-
-if (recommendedSize != null) {
-  setState(() => selectedSize = recommendedSize);
-}</pre>
+// Add this button anywhere in your product screen:
+OutlinedButton.icon(
+  onPressed: () async {
+    final result = await BodyMeasurementPlugin().startCapture(
+      context,
+    );
+    final rec = result?.recommendation?.recommendedSize;
+    if (rec != null && mounted) {
+      final upper = rec.toUpperCase();
+      if (_sizes.contains(upper)) {
+        setState(() => _selectedSize = upper);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Recommended Size: $upper')),
+      );
+    }
+  },
+  icon: const Icon(Icons.straighten),
+  label: const Text('Find My Size &amp; Try-On'),
+  style: OutlinedButton.styleFrom(
+    minimumSize: const Size.fromHeight(48),
+  ),
+),</pre>
           </div>
 
           <div class="dev-step-card dev-step-wide">
